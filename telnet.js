@@ -3,56 +3,63 @@ var DOMParser = require('xmldom').DOMParser
 var mkKRLfn = require('../mkKRLfn')
 var mkKRLaction = require('../mkKRLaction')
 var Telnet = require('telnet-client')
+
 var connection = new Telnet()
-
-var connect = function (connection, params) {
-  connection.on('ready', function (prompt) {
-    console.log('ready!')
-  })
-
-  connection.on('failedlogin', function (prompt) {
-    console.log('failedlogin event!')
-  })
-
-  connection.on('writedone', function (prompt) {
-    console.log('writedone event!')
-  })
-
-  connection.on('connect', function (prompt) {
-    console.log('telnet connection established!')
-    connection.send(params.username + '\r\n' + params.password + '\r\n', null,
-    function (err, response) {
-      if (err) {
-        console.error(err)
-      }
-      console.log('login cmd response', response)
-    })
-  })
-
-  connection.on('timeout', function () {
-    console.log('socket timeout!')
-    // connection.end()
-  })
-
-  connection.on('close', function () {
-    console.log('connection closed')
-  })
-
-  try {
-    console.log('trying telnet connection.')
-    connection.connect(params)
-  } catch (err) {
-    console.error(err)
-    console.log('telnet params: ' + params)
-  }
+// default parameters
+var parameters = {
+  "host": '127.0.0.1',
+  "port": 23,
+  "shellPrompt": "QNET>",
+  "loginPrompt": "login:",
+  "passwordPrompt": "password:",
+  "username": 'root',
+  "password": 'guest',
+  "initialLFCR": true,
+  "timeout": 150000
 }
+
+var getHost = function() {
+  return parameters.host
+}
+
+connection.on('ready', function (prompt) {
+  console.log('ready!')
+})
+
+connection.on('failedlogin', function (prompt) {
+  console.log('failedlogin event!')
+})
+
+connection.on('writedone', function (prompt) {
+  console.log('writedone event!')
+})
+
+connection.on('connect', function (prompt) {
+  console.log('telnet connection established!')
+  connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
+  function (err, response) {
+    if (err) {
+      console.error(err)
+    }
+    console.log('login cmd response', response)
+  })
+})
+
+connection.on('timeout', function () {
+  console.log('socket timeout!')
+  // connection.end()
+})
+
+connection.on('close', function () {
+  console.log('connection closed')
+})
 
 module.exports = function (core) {
   return {
     def: {
       'host': mkKRLfn([
       ], function (ctx, args) {
-        return params.host
+        return getHost()
       }),
       'sendCMD': mkKRLaction([
         'command'
@@ -76,13 +83,15 @@ module.exports = function (core) {
         if (!_.has(args, 'params')) {
           throw new Error('telnet:connect requires a map of parameters')
         }
-        if (!_.has(args.params, 'host')
-        || !_.has(args.params, 'username')
+        if (!_.has(args.params, 'username')
         || !_.has(args.params, 'password')) {
-          throw new Error('telnet:connect requires host ip, username, and password')
+          throw new Error('telnet:connect(params): params requires a username, and password')
         }
+        Object.keys(args.params).forEach(function(key) {
+          parameters[key] = args.params[key]
+        })
         try {
-          return connect(connection, args.params)
+          connection.connect(parameters)
         } catch (err) {
           console.error(err);
           return err
