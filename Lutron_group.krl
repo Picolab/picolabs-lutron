@@ -11,6 +11,7 @@ ruleset Lutron_group {
       [ { "domain": "lutron", "type": "groupLightsOn" },
         { "domain": "lutron", "type": "groupLightsOff" },
         { "domain": "lutron", "type": "groupLightsBrightness", "attrs": [ "brightness" ] },
+        { "domain": "lutron", "type": "groupLightsFlash", "attrs": [ "fade_time", "delay" ] },
         { "domain": "lutron", "type": "groupShadesOpen", "attrs": [ "percentage" ] },
         { "domain": "lutron", "type": "groupShadesClose" }
       //, { "domain": "d2", "type": "t2", "attrs": [ "a1", "a2" ] }
@@ -57,6 +58,21 @@ ruleset Lutron_group {
       {
         "eci": Tx, "eid": "group_lights_brightness",
         "domain": "lutron", "type": "setBrightness",
+        "attrs": event:attrs
+      })
+  }
+
+  rule groupLightsFlash {
+    select when lutron groupLightsFlash
+    foreach subscription:established() setting(subscription)
+    pre {
+      Tx = subscription{"Tx"}
+    }
+    if (subscription{"Tx_role"} == "light") then
+    event:send(
+      {
+        "eci": Tx, "eid": "group_lights_flash",
+        "domain": "lutron", "type": "flash",
         "attrs": event:attrs
       })
   }
