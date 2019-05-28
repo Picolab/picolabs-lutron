@@ -3,21 +3,32 @@ ruleset Lutron_manager {
     use module io.picolabs.subscription alias subs
     use module io.picolabs.wrangler alias wrangler
 
-    shares __testing, data, getXML, getLightIDs, getShadeIDs
+    shares __testing, data, getXML, getLightIDs, getShadeIDs, isConnected, lightIDs, shadeIDs
     provides __testing, data
   }
   global {
     __testing = { "queries": [ { "name": "data" },
+                              { "name": "isConnected" },
                               { "name": "getXML" },
                               { "name": "getLightIDs" },
-                              { "name": "getShadeIDs" } ],
+                              { "name": "getShadeIDs" },
+                              { "name": "lightIDs" },
+                              { "name": "shadeIDs" } ],
                   "events": [ { "domain": "lutron", "type": "login",
-                                "attrs": [ "host", "username", "password" ] },
+                                  "attrs": [ "host", "username", "password" ] },
                               { "domain": "lutron", "type": "sendCMD",
-                                "attrs": [ "cmd" ] },
+                                  "attrs": [ "cmd" ] },
                               { "domain": "lutron", "type": "create_lights" },
                               { "domain": "lutron", "type": "create_shades" },
+                              { "domain": "lutron", "type": "create_group",
+                                  "attrs": [ "name" ] },
                               { "domain": "lutron", "type": "delete_all_devices" } ] }
+    data = function() {
+      "host: " + telnet:host()
+    }
+    isConnected = function() {
+      "not implemented yet"
+    }
     getXML = function() {
       url = "http://" + telnet:host().klog("host") + "/DbXmlInfo.xml";
       http:get(url){"content"}
@@ -30,7 +41,12 @@ ruleset Lutron_manager {
       xml = getXML();
       telnet:getShadesFromXML(xml)
     }
-
+    lightIDs = function() {
+      ent:lightIDs
+    }
+    shadeIDs = function() {
+      ent:shadeIDs
+    }
   }
   rule login {
     select when lutron login
@@ -46,9 +62,6 @@ ruleset Lutron_manager {
                 "timeout": 150000 }
     }
     telnet:connect(params)
-    fired {
-      raise lutron event "lightsOff"
-    }
   }
 
   rule Send_Command {
@@ -61,8 +74,10 @@ ruleset Lutron_manager {
     foreach getLightIDs() setting(light)
     pre {
       name = "Light " + light
+      exists = ent:lightIDs.any(function(x) { x == light })
     }
-    always {
+    if not exists then noop()
+    fired {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
@@ -71,7 +86,8 @@ ruleset Lutron_manager {
           "rids": [
             "Lutron_light"
             ]
-        }
+        };
+      ent:lightIDs := ent:lightIDs.defaultsTo([]).append(light)
     }
   }
 
@@ -80,8 +96,10 @@ ruleset Lutron_manager {
     foreach getShadeIDs() setting(shade)
     pre {
       name = "Shade " + shade
+      exists = ent:shadeIDs.any(function(x) { x == shade })
     }
-    always {
+    if not exists then noop()
+    fired {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
@@ -90,7 +108,28 @@ ruleset Lutron_manager {
           "rids": [
             "Lutron_shade"
             ]
-        }
+        };
+      ent:shadeIDs := ent:shadeIDs.defaultsTo([]).append(shade)
+    }
+  }
+
+  rule create_lutron_group {
+    select when lutron create_group
+    pre {
+      sequence = ent:numGroups.defaultsTo(0) + 1
+      name = event:attr("name") || "Group " + sequence
+    }
+    always {
+      raise wrangler event "child_creation"
+        attributes {
+          "name": name,
+          "color": "#87cefa",
+          "rids": [
+            "Lutron_group"
+            ]
+        };
+
+      ent:numGroups := sequence
     }
   }
 
@@ -106,5 +145,14 @@ ruleset Lutron_manager {
           "name": child_name
         }
     }
+  }
+
+  rule add_to_group {
+    select when lutron add_device_to_group
+    pre {
+      device = getChildByName(event:attr("deviceName"))
+      group = getChildByName(event:attr("groupName"))
+    }
+    send_directive("group", {"status": "not added", "description": "not implemented"})
   }
 }
