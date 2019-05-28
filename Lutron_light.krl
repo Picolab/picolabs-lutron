@@ -35,6 +35,21 @@ ruleset Lutron_light {
     }
   }
 
+  rule autoAccept {
+    select when wrangler inbound_pending_subscription_added
+    pre {
+      attrs = event:attrs.klog("subscription: ");
+    }
+
+    if (attrs{"Rx_role"} == "light") then noop()
+
+    fired {
+      raise wrangler event "pending_subscription_approval"
+        attributes attrs;
+      log info "auto accepted subscription."
+    }
+  }
+
   rule Send_Command_lightsOn {
     select when lutron lightsOn
     pre {

@@ -5,8 +5,9 @@ ruleset Lutron_shade {
 
   global {
     __testing = { "queries": [ { "name": "__testing" } ],
-                  "events": [ { "domain": "lutron", "type": "shadeOpen" },
-                              { "domain": "lutron", "type": "shadeClose" } ] }
+                  "events": [ { "domain": "lutron", "type": "shadesOpen",
+                                "attrs": [ "percentage" ] },
+                              { "domain": "lutron", "type": "shadesClose" } ] }
   }
   rule initialize {
     select when wrangler ruleset_added where event:attr("rids") >< meta:rid
@@ -19,16 +20,32 @@ ruleset Lutron_shade {
     }
   }
 
-  rule Send_Command_shadeOpen {
-    select when lutron shadeOpen
+  rule autoAccept {
+    select when wrangler inbound_pending_subscription_added
     pre {
-      command = "#SHADEGRP," + ent:IntegrationID + ",1,100"
+      attrs = event:attrs.klog("subscription: ");
+    }
+
+    if (attrs{"Rx_role"} == "shade") then noop()
+
+    fired {
+      raise wrangler event "pending_subscription_approval"
+        attributes attrs;
+      log info "auto accepted subscription."
+    }
+  }
+
+  rule Send_Command_shadeOpen {
+    select when lutron shadesOpen
+    pre {
+      open_percentage = event:attr("percentage") || 100
+      command = "#SHADEGRP," + ent:IntegrationID + ",1," + open_percentage
     }
     telnet:sendCMD(command)
   }
 
   rule Send_Command_shadeClose {
-    select when lutron shadeClose
+    select when lutron shadesClose
     pre {
       command = "#SHADEGRP," + ent:IntegrationID + ",1,0"
     }
