@@ -19,8 +19,10 @@ ruleset Lutron_light {
                                 "attrs": [ ] } ]}
     data = function() {
       command = "?OUTPUT," + ent:IntegrationID + ",1";
-      response = telnet:sendCMD(command);
-      response
+      response = telnet:query(command);
+      percentage = response.extract(re#(\d+)[.]#)[0];
+      status = (percentage == "0") => "off" | "at " + percentage + "% brightness";
+      "Light "+ ent:IntegrationID + " is " + status
     }
   }
 
@@ -41,7 +43,7 @@ ruleset Lutron_light {
       attrs = event:attrs.klog("subscription: ");
     }
 
-    if (attrs{"Rx_role"} == "light") then noop()
+    if (attrs{"Rx_role"}.lc() == "light") then noop()
 
     fired {
       raise wrangler event "pending_subscription_approval"
@@ -86,7 +88,7 @@ ruleset Lutron_light {
     telnet:sendCMD(command)
   }
 
-  rule Send_Command_stopFlash{
+  rule Send_Command_stopFlash {
     select when lutron stopFlash
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",4"
