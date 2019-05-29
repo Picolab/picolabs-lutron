@@ -61,22 +61,6 @@ module.exports = function (core) {
       ], function (ctx, args) {
         return getHost()
       }),
-      'sendCMD': mkKRLaction([
-        'command'
-      ], function (ctx, args) {
-        if (!_.has(args, 'command')) {
-          throw new Error('telnet:sendCMD needs a command string')
-        }
-        console.log('send cmd args', args)
-        connection.send(args.command + '\r\n', null, function (err, response) {
-          if (err) {
-            console.error(err)
-            return err
-          }
-          console.log('send cmd results', response)
-          return response
-        })
-      }),
       'connect': mkKRLaction([
         'params'
       ], function (ctx, args) {
@@ -96,6 +80,40 @@ module.exports = function (core) {
           console.error(err);
           return err
         }
+      }),
+      'sendCMD': mkKRLaction([
+        'command'
+      ], function (ctx, args) {
+        if (!_.has(args, 'command')) {
+          throw new Error('telnet:sendCMD needs a command string')
+        }
+        console.log('send cmd args', args)
+        let res = connection.send(args.command + '\r\n', null, function (err, response) {
+          if (err) {
+            console.error(err)
+            return err
+          }
+          console.log('send cmd results', response)
+          return response
+        })
+        return res
+      }),
+      'query': mkKRLfn([
+        'command'
+      ], function (ctx, args) {
+        if (args.command.substring(0,1) !== "?") {
+          throw new Error('telnet:query(q): q must begin with a ?')
+        }
+        console.log('send query args', args)
+        let res = connection.send(args.command + '\r\n', null, function(err, response) {
+          if (err) {
+            console.error(err)
+            return err
+          }
+          console.log('send query results', response)
+          return response
+        })
+        return res
       }),
       'getLightsFromXML':  mkKRLfn([
         'xml'
