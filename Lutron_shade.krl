@@ -1,13 +1,22 @@
 ruleset Lutron_shade {
   meta {
-    shares __testing
+    shares __testing, data
   }
 
   global {
-    __testing = { "queries": [ { "name": "__testing" } ],
+    __testing = { "queries": [ { "name": "__testing" },
+                              { "name": "data" } ],
                   "events": [ { "domain": "lutron", "type": "shadesOpen",
                                 "attrs": [ "percentage" ] },
                               { "domain": "lutron", "type": "shadesClose" } ] }
+
+    data = function() {
+      command = "?SHADEGRP," + ent:IntegrationID + ",1";
+      response = telnet:query(command);
+      percentage = response.extract(re#(\d+)[.]#)[0];
+      status = (percentage == "0") => "closed" | percentage + "% open";
+      "Shade "+ ent:IntegrationID + " is " + status
+    }
   }
   rule initialize {
     select when wrangler ruleset_added where event:attr("rids") >< meta:rid
@@ -26,7 +35,7 @@ ruleset Lutron_shade {
       attrs = event:attrs.klog("subscription: ");
     }
 
-    if (attrs{"Rx_role"} == "shade") then noop()
+    if (attrs{"Rx_role"}.lc() == "shade") then noop()
 
     fired {
       raise wrangler event "pending_subscription_approval"
