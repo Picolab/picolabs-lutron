@@ -13,7 +13,8 @@ ruleset Lutron_manager {
                               { "name": "getLightIDs" },
                               { "name": "getShadeIDs" },
                               { "name": "lightIDs" },
-                              { "name": "shadeIDs" } ],
+                              { "name": "shadeIDs" },
+                              { "name": "getChildByName", "args": [ "name" ] } ],
                   "events": [ { "domain": "lutron", "type": "login",
                                   "attrs": [ "host", "username", "password" ] },
                               { "domain": "lutron", "type": "sendCMD",
@@ -22,9 +23,13 @@ ruleset Lutron_manager {
                               { "domain": "lutron", "type": "create_shades" },
                               { "domain": "lutron", "type": "create_group",
                                   "attrs": [ "name" ] },
+                              { "domain": "lutron", "type": "add_device_to_group",
+                                  "attrs": [ "deviceName", "groupName" ] },
+                              { "domain": "lutron", "type": "add_group_to_group",
+                                  "attrs": [ "childGroupName", "parentGroupName" ] },
                               { "domain": "lutron", "type": "delete_all_devices" } ] }
     data = function() {
-      "host: " + telnet:host()
+      "telnet-host:" + telnet:host()
     }
     isConnected = function() {
       "not implemented yet"
@@ -46,6 +51,11 @@ ruleset Lutron_manager {
     }
     shadeIDs = function() {
       ent:shadeIDs
+    }
+    getChildByName = function(name) {
+      wrangler:children().filter(function(x) {
+        x{"name"} == name
+      })[0]
     }
   }
   rule login {
@@ -133,6 +143,16 @@ ruleset Lutron_manager {
     }
   }
 
+  rule decrement_group_count {
+    select when lutron decrement_group_count
+    pre {
+      count = ent:numGroups.defaultsTo(1) - 1
+    }
+    always {
+      ent:numGroups := count
+    }
+  }
+
   rule delete_all_devices {
     select when lutron delete_all_devices
     foreach wrangler:children() setting (child)
@@ -147,12 +167,46 @@ ruleset Lutron_manager {
     }
   }
 
-  rule add_to_group {
+  rule add_device_to_group {
     select when lutron add_device_to_group
     pre {
-      device = getChildByName(event:attr("deviceName"))
-      group = getChildByName(event:attr("groupName"))
+      device_eci = getChildByName(event:attr("deviceName")){"eci"}.klog("device_eci")
+      group_eci = getChildByName(event:attr("groupName")){"eci"}.klog("group_eci")
+      device_type = event:attr("deviceName").substr(0,5)
     }
-    send_directive("group", {"status": "not added", "description": "not implemented"})
+    if (device_eci && group_eci) then
+    event:send(
+      {
+        "eci": group_eci, "eid": "subscription",
+        "domain": "wrangler", "type": "subscription",
+        "attrs": {
+          "name": event:attr("deviceName"),
+          "Rx_role": "controller",
+          "Tx_role": device_type,
+          "channel_type": "subscription",
+          "wellKnown_Tx": device_eci
+        }
+      })
+  }
+
+  rule add_group_to_group {
+    select when lutron add_group_to_group
+    pre {
+      child_group_eci = getChildByName(event:attr("childGroupName")){"eci"}.klog("child_eci")
+      parent_group_eci = getChildByName(event:attr("parentGroupName")){"eci"}.klog("parent_eci")
+    }
+    if (child_group_eci && parent_group_eci) then
+    event:send(
+      {
+        "eci": parent_group_eci, "eid": "subscription",
+        "domain": "wrangler", "type": "subscription",
+        "attrs": {
+          "name": event:attr("childGroupName"),
+          "Rx_role": "controller",
+          "Tx_role": "group",
+          "channel_type": "subscription",
+          "wellKnown_Tx": child_group_eci
+        }
+      })
   }
 }
