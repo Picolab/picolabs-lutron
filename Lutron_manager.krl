@@ -3,11 +3,13 @@ ruleset Lutron_manager {
     use module io.picolabs.subscription alias subs
     use module io.picolabs.wrangler alias wrangler
 
-    shares __testing, data, getXML, getLightIDs, getShadeIDs, isConnected, lightIDs, shadeIDs
-    provides __testing, data
+    shares __testing, data, extractData, getXML, getLightIDs, getShadeIDs, getAreaIDs,
+            isConnected, lightIDs, shadeIDs, getChildByName
+    provides __testing, data, isConnected
   }
   global {
     __testing = { "queries": [ { "name": "data" },
+                              { "name": "extractData" },
                               { "name": "isConnected" },
                               { "name": "getXML" },
                               { "name": "getLightIDs" },
@@ -17,10 +19,13 @@ ruleset Lutron_manager {
                               { "name": "getChildByName", "args": [ "name" ] } ],
                   "events": [ { "domain": "lutron", "type": "login",
                                   "attrs": [ "host", "username", "password" ] },
+                              { "domain": "lutron", "type": "logout" },
+                              { "domain": "lutron", "type": "sync_data"},
                               { "domain": "lutron", "type": "sendCMD",
                                   "attrs": [ "cmd" ] },
                               { "domain": "lutron", "type": "create_lights" },
                               { "domain": "lutron", "type": "create_shades" },
+                              { "domain": "lutron", "type": "create_default_areas" },
                               { "domain": "lutron", "type": "create_group",
                                   "attrs": [ "name" ] },
                               { "domain": "lutron", "type": "add_device_to_group",
@@ -29,22 +34,36 @@ ruleset Lutron_manager {
                                   "attrs": [ "childGroupName", "parentGroupName" ] },
                               { "domain": "lutron", "type": "delete_all_devices" } ] }
     data = function() {
-      "telnet-host:" + telnet:host()
+      ent:data
+    }
+    extractData = function() {
+      xml = getXML();
+      telnet:extractDataFromXML(xml)
     }
     isConnected = function() {
-      "not implemented yet"
+      ent:isConnected
     }
     getXML = function() {
       url = "http://" + telnet:host().klog("host") + "/DbXmlInfo.xml";
       http:get(url){"content"}
     }
     getLightIDs = function() {
-      xml = getXML();
-      telnet:getLightsFromXML(xml)
+      ent:data.map(function(v,k) {
+        v{"lights"}
+      }).filter(function(v,k) {
+        v != []
+      }).values().reduce(function(a,b) {
+        a.append(b)
+      })
     }
     getShadeIDs = function() {
-      xml = getXML();
-      telnet:getShadesFromXML(xml)
+      ent:data.map(function(v,k) {
+        v{"shades"}
+      }).filter(function(v,k) {
+        v != []
+      }).values().reduce(function(a,b) {
+        a.append(b)
+      })
     }
     lightIDs = function() {
       ent:lightIDs
@@ -52,12 +71,23 @@ ruleset Lutron_manager {
     shadeIDs = function() {
       ent:shadeIDs
     }
+    areaIDs = function() {
+      ent:areaIDs
+    }
     getChildByName = function(name) {
       wrangler:children().filter(function(x) {
         x{"name"} == name
       })[0]
     }
   }
+
+  rule lutron_online {
+    select when system online
+    always {
+      ent:isConnected := false
+    }
+  }
+
   rule login {
     select when lutron login
     pre {
@@ -68,15 +98,45 @@ ruleset Lutron_manager {
                 "passwordPrompt": "password:",
                 "username": event:attr("username"),
                 "password": event:attr("password"),
+                "failedLoginMatch": "bad login",
                 "initialLFCR": true,
                 "timeout": 150000 }
+      result = telnet:connect(params)
+      status = (result.extract(re#(QNET>+)#)[0]).klog("extracted") => "success" | "failed"
     }
-    telnet:connect(params)
+    send_directive("telnet", {"status": status, "result": result})
+    fired {
+      ent:isConnected := true if status == "success";
+      raise lutron event "sync_data" if ent:isConnected
+    }
   }
 
-  rule Send_Command {
+  rule logout {
+    select when lutron logout
+    pre {
+      result = telnet:disconnect()
+    }
+    always {
+      ent:isConnected := false
+    }
+  }
+
+  rule sync_data {
+    select when lutron sync_data
+    pre {
+      data = extractData()
+    }
+    always {
+      ent:data := data
+    }
+  }
+
+  rule send_command {
     select when lutron sendCMD
-    telnet:sendCMD(event:attr("cmd"))
+    pre {
+      result = telnet:sendCMD(event:attr("cmd"))
+    }
+    send_directive("command",{"result": result})
   }
 
   rule create_light_picos {
@@ -123,47 +183,49 @@ ruleset Lutron_manager {
     }
   }
 
+  rule create_area_picos {
+    select when lutron create_default_areas
+    foreach ent:data setting(area)
+    pre {
+      name = area{"name"}
+      id = area{"id"}
+      lights = area{"lights"}
+    }
+    if (lights != []) then noop()
+    fired {
+      raise wrangler event "child_creation"
+        attributes {
+          "name": name,
+          "IntegrationID": id,
+          "light_ids": lights,
+          "color": "#EB4839",
+          "rids": [
+            "Lutron_area"
+            ]
+        }
+    }
+  }
+
   rule create_lutron_group {
     select when lutron create_group
     pre {
       sequence = ent:numGroups.defaultsTo(0) + 1
-      name = event:attr("name") || "Group " + sequence
+      name = event:attr("name") || false
     }
-    always {
+    if name then noop()
+    fired {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
-          "color": "#87cefa",
+          "color": "#3CAD5E",
           "rids": [
             "Lutron_group"
             ]
         };
-
-      ent:numGroups := sequence
     }
-  }
-
-  rule decrement_group_count {
-    select when lutron decrement_group_count
-    pre {
-      count = ent:numGroups.defaultsTo(1) - 1
-    }
-    always {
-      ent:numGroups := count
-    }
-  }
-
-  rule delete_all_devices {
-    select when lutron delete_all_devices
-    foreach wrangler:children() setting (child)
-    pre {
-      child_name = child{"name"}
-    }
-    always {
-      raise wrangler event "child_deletion"
-        attributes {
-          "name": child_name
-        }
+    else {
+      raise lutron event "error"
+        attributes {"message": "Must provide a name for the new lutron group"}
     }
   }
 
@@ -187,6 +249,11 @@ ruleset Lutron_manager {
           "wellKnown_Tx": device_eci
         }
       })
+
+    notfired {
+      raise lutron event "error"
+        attributes {"message": "Invalid deviceName or groupName"}
+    }
   }
 
   rule add_group_to_group {
@@ -208,5 +275,29 @@ ruleset Lutron_manager {
           "wellKnown_Tx": child_group_eci
         }
       })
+
+    notfired {
+      raise lutron event "error"
+        attributes {"message": "Invalid childGroupName or parentGroupName"}
+    }
+  }
+
+  rule delete_all_devices {
+    select when lutron delete_all_devices
+    foreach wrangler:children() setting (child)
+    pre {
+      child_name = child{"name"}
+    }
+    always {
+      raise wrangler event "child_deletion"
+        attributes {
+          "name": child_name
+        }
+    }
+  }
+
+  rule handle_error {
+    select when lutron error
+    send_directive("lutron_error", {"message": event:attr("message")})
   }
 }
