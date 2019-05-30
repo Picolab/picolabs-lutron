@@ -2,11 +2,11 @@ ruleset Lutron_light {
   meta {
     use module io.picolabs.subscription alias subs
 
-    shares __testing, data
-    provides __testing, data
+    shares __testing, status
+    provides __testing, status
   }
   global {
-    __testing = { "queries": [ { "name": "data" } ],
+    __testing = { "queries": [ { "name": "status" } ],
                   "events": [ { "domain": "lutron", "type": "lightsOn",
                                 "attrs": [  ] },
                               { "domain": "lutron", "type": "lightsOff",
@@ -17,10 +17,14 @@ ruleset Lutron_light {
                                 "attrs": [ "fade_time", "delay" ] },
                               { "domain": "lutron", "type": "stopFlash",
                                 "attrs": [ ] } ]}
-    data = function() {
+    brightness = function() {
       command = "?OUTPUT," + ent:IntegrationID + ",1";
       response = telnet:query(command);
-      percentage = response.extract(re#(\d+)[.]#)[0];
+      response.extract(re#(\d+)[.]#)[0];
+    }
+
+    status = function() {
+      percentage = brightness();
       status = (percentage == "0") => "off" | "at " + percentage + "% brightness";
       "Light "+ ent:IntegrationID + " is " + status
     }
@@ -56,26 +60,28 @@ ruleset Lutron_light {
     select when lutron lightsOn
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",1,100"
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("light", {"result": result})
   }
 
   rule Send_Command_lightsOff {
     select when lutron lightsOff
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",1,0"
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("light", {"result": result})
   }
 
   rule Send_Command_setBrightness {
     select when lutron setBrightness
     pre {
-      brightness = event:attr("brightness")
+      brightness = event:attr("brightness").defaultsTo(brightness())
       command = "#OUTPUT," + ent:IntegrationID + ",1," + brightness
+      result = telnet:sendCMD(command)
     }
-    if (brightness != null && brightness != "") then
-    telnet:sendCMD(command)
+    send_directive("light", {"result": result})
   }
 
   rule Send_Command_flash {
@@ -84,15 +90,17 @@ ruleset Lutron_light {
       fade_time = event:attr("fade_time") || 5
       delay = event:attr("delay") || 0
       command = "#OUTPUT," + ent:IntegrationID + ",5," + fade_time + "," + delay
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("light", {"result": result})
   }
 
   rule Send_Command_stopFlash {
     select when lutron stopFlash
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",4"
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("light", {"result": result})
   }
 }

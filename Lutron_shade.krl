@@ -1,16 +1,17 @@
 ruleset Lutron_shade {
   meta {
-    shares __testing, data
+    shares __testing, status
+    provides status
   }
 
   global {
     __testing = { "queries": [ { "name": "__testing" },
-                              { "name": "data" } ],
+                              { "name": "status" } ],
                   "events": [ { "domain": "lutron", "type": "shadesOpen",
                                 "attrs": [ "percentage" ] },
                               { "domain": "lutron", "type": "shadesClose" } ] }
 
-    data = function() {
+    status = function() {
       command = "?SHADEGRP," + ent:IntegrationID + ",1";
       response = telnet:query(command);
       percentage = response.extract(re#(\d+)[.]#)[0];
@@ -49,15 +50,17 @@ ruleset Lutron_shade {
     pre {
       open_percentage = event:attr("percentage") || 100
       command = "#SHADEGRP," + ent:IntegrationID + ",1," + open_percentage
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("shade", {"result": result})
   }
 
   rule Send_Command_shadeClose {
     select when lutron shadesClose
     pre {
       command = "#SHADEGRP," + ent:IntegrationID + ",1,0"
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("shade", {"result": result})
   }
 }

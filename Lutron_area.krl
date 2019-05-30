@@ -8,7 +8,7 @@ ruleset Lutron_area {
         { "name": "status" }
       //, { "name": "entry", "args": [ "key" ] }
       ] , "events":
-      [ { "domain": "lutron", "type": "area_position", "attrs": [ "level/position" ] },
+      [ { "domain": "lutron", "type": "area_level", "attrs": [ "level/position" ] },
         { "domain": "lutron", "type": "area_raise" },
         { "domain": "lutron", "type": "area_lower" }
       //, { "domain": "d2", "type": "t2", "attrs": [ "a1", "a2" ] }
@@ -39,26 +39,27 @@ ruleset Lutron_area {
   rule level_position {
     select when lutron area_level or lutron area_position
     pre {
-      level_position = event:attr("level/position")
-      command = "#AREA," + ent:IntegrationID + ",1," + level_position
+      command = "#AREA," + ent:IntegrationID + ",1," + event:attr("level/position")
+      result = telnet:sendCMD(command)
     }
-    if level_position then
-    telnet:sendCMD(command)
+    send_directive("lutron_area", {"result": result})
   }
 
   rule raise {
     select when lutron area_raise
     pre {
       command = "#AREA," + ent:IntegrationID + ",2"
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("lutron_area", {"result": result})
   }
 
   rule lower {
     select when lutron area_lower
     pre {
       command = "#AREA," + ent:IntegrationID + ",3"
+      result = telnet:sendCMD(command)
     }
-    telnet:sendCMD(command)
+    send_directive("lutron_area", {"result": result})
   }
 }
