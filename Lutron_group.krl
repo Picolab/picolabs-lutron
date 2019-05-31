@@ -2,11 +2,12 @@ ruleset Lutron_group {
   meta {
     use module io.picolabs.subscription alias subscription
     use module io.picolabs.wrangler alias wrangler
-    shares __testing
+    shares __testing, isConnected
   }
   global {
     __testing = { "queries":
-      [ { "name": "__testing" }
+      [ { "name": "__testing" },
+        { "name": "isConnected" }
       //, { "name": "entry", "args": [ "key" ] }
       ] , "events":
       [ { "domain": "lutron", "type": "groupLightsOn" },
@@ -18,6 +19,10 @@ ruleset Lutron_group {
         { "domain": "lutron", "type": "groupShadesClose" }
       //, { "domain": "d2", "type": "t2", "attrs": [ "a1", "a2" ] }
       ]
+    }
+
+    isConnected = function() {
+      wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
     }
   }
 
@@ -46,12 +51,15 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupLightsOn"
             | "notLight"
     }
-    if not (type == "notLight") then
+    if (type != "notLight" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_lights_on",
         "domain": "lutron", "type": type
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule groupLightsOff {
@@ -64,12 +72,15 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupLightsOff"
             | "notLight"
     }
-    if not (type == "notLight") then
+    if (type != "notLight" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_lights_off",
         "domain": "lutron", "type": type
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule groupLightsBrightness {
@@ -82,13 +93,16 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupLightsBrightness"
             | "notLight"
     }
-    if not (type == "notLight") then
+    if (type != "notLight" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_lights_brightness",
         "domain": "lutron", "type": type,
         "attrs": event:attrs
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule groupLightsFlash {
@@ -101,13 +115,16 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupLightsFlash"
             | "notLight"
     }
-    if not (type == "notLight") then
+    if (type != "notLight" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_lights_flash",
         "domain": "lutron", "type": type,
         "attrs": event:attrs
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule groupLightsStopFlash {
@@ -120,12 +137,15 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupLightsStopFlash"
             | "notLight"
     }
-    if not (type == "notLight") then
+    if (type != "notLight" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_lights_stop_flash",
         "domain": "lutron", "type": type
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule groupShadesOpen {
@@ -138,13 +158,16 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupShadesOpen"
             | "notShade"
     }
-    if not (type == "notShade") then
+    if (type != "notShade" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_shades_open",
         "domain": "lutron", "type": type,
         "attrs": event:attrs
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule groupShadesClose {
@@ -157,12 +180,15 @@ ruleset Lutron_group {
             | (subscriber == "group") => "groupShadesClose"
             | "notShade"
     }
-    if not (type == "notShade") then
+    if (type != "notShade" && isConnected()) then
     event:send(
       {
         "eci": Tx, "eid": "group_shades_close",
         "domain": "lutron", "type": type
       })
+    notfired {
+      raise lutron event "notLoggedIn" if not isConnected()
+    }
   }
 
   rule updateManagerGroupCount {
@@ -172,5 +198,13 @@ ruleset Lutron_group {
         "eci": wrangler:parent_eci(), "eid": "decrement_group_count",
         "domain": "lutron", "type": "decrement_group_count"
       })
+  }
+
+  rule handleNotLoggedIn {
+    select when lutron notLoggedIn
+    send_directive("lutron_error", {"message": "Not Logged In"})
+    always {
+      last
+    }
   }
 }

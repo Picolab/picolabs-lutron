@@ -1,11 +1,10 @@
 ruleset Lutron_manager {
   meta {
-    use module io.picolabs.subscription alias subs
     use module io.picolabs.wrangler alias wrangler
 
     shares __testing, data, extractData, getXML, getLightIDs, getShadeIDs, getAreaIDs,
             isConnected, lightIDs, shadeIDs, getChildByName
-    provides __testing, data, isConnected
+    provides data, isConnected
   }
   global {
     __testing = { "queries": [ { "name": "data" },
@@ -31,8 +30,7 @@ ruleset Lutron_manager {
                               { "domain": "lutron", "type": "add_device_to_group",
                                   "attrs": [ "deviceName", "groupName" ] },
                               { "domain": "lutron", "type": "add_group_to_group",
-                                  "attrs": [ "childGroupName", "parentGroupName" ] },
-                              { "domain": "lutron", "type": "delete_all_devices" } ] }
+                                  "attrs": [ "childGroupName", "parentGroupName" ] } ] }
     data = function() {
       ent:data
     }
@@ -41,7 +39,7 @@ ruleset Lutron_manager {
       telnet:extractDataFromXML(xml)
     }
     isConnected = function() {
-      ent:isConnected
+      ent:isConnected.defaultsTo(false)
     }
     getXML = function() {
       url = "http://" + telnet:host().klog("host") + "/DbXmlInfo.xml";
@@ -279,20 +277,6 @@ ruleset Lutron_manager {
     notfired {
       raise lutron event "error"
         attributes {"message": "Invalid childGroupName or parentGroupName"}
-    }
-  }
-
-  rule delete_all_devices {
-    select when lutron delete_all_devices
-    foreach wrangler:children() setting (child)
-    pre {
-      child_name = child{"name"}
-    }
-    always {
-      raise wrangler event "child_deletion"
-        attributes {
-          "name": child_name
-        }
     }
   }
 

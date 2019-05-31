@@ -1,12 +1,15 @@
 ruleset Lutron_shade {
   meta {
-    shares __testing, status
+    use module io.picolabs.wrangler alias wrangler
+
+    shares __testing, status, isConnected
     provides status
   }
 
   global {
     __testing = { "queries": [ { "name": "__testing" },
-                              { "name": "status" } ],
+                              { "name": "status" },
+                              { "name": "isConnected"} ],
                   "events": [ { "domain": "lutron", "type": "shadesOpen",
                                 "attrs": [ "percentage" ] },
                               { "domain": "lutron", "type": "shadesClose" } ] }
@@ -17,6 +20,10 @@ ruleset Lutron_shade {
       percentage = response.extract(re#(\d+)[.]#)[0];
       status = (percentage == "0") => "closed" | percentage + "% open";
       "Shade "+ ent:IntegrationID + " is " + status
+    }
+
+    isConnected = function() {
+      wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
     }
   }
   rule initialize {
@@ -50,7 +57,8 @@ ruleset Lutron_shade {
     pre {
       open_percentage = event:attr("percentage") || 100
       command = "#SHADEGRP," + ent:IntegrationID + ",1," + open_percentage
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("shade", {"result": result})
   }
@@ -59,7 +67,8 @@ ruleset Lutron_shade {
     select when lutron shadesClose
     pre {
       command = "#SHADEGRP," + ent:IntegrationID + ",1,0"
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("shade", {"result": result})
   }

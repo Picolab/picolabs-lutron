@@ -1,12 +1,13 @@
 ruleset Lutron_light {
   meta {
-    use module io.picolabs.subscription alias subs
+    use module io.picolabs.wrangler alias wrangler
 
-    shares __testing, status
+    shares __testing, status, isConnected
     provides __testing, status
   }
   global {
-    __testing = { "queries": [ { "name": "status" } ],
+    __testing = { "queries": [ { "name": "status" },
+                              { "name": "isConnected" } ],
                   "events": [ { "domain": "lutron", "type": "lightsOn",
                                 "attrs": [  ] },
                               { "domain": "lutron", "type": "lightsOff",
@@ -27,6 +28,10 @@ ruleset Lutron_light {
       percentage = brightness();
       status = (percentage == "0") => "off" | "at " + percentage + "% brightness";
       "Light "+ ent:IntegrationID + " is " + status
+    }
+
+    isConnected = function() {
+      wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
     }
   }
 
@@ -60,7 +65,8 @@ ruleset Lutron_light {
     select when lutron lightsOn
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",1,100"
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("light", {"result": result})
   }
@@ -69,7 +75,8 @@ ruleset Lutron_light {
     select when lutron lightsOff
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",1,0"
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("light", {"result": result})
   }
@@ -79,7 +86,8 @@ ruleset Lutron_light {
     pre {
       brightness = event:attr("brightness").defaultsTo(brightness())
       command = "#OUTPUT," + ent:IntegrationID + ",1," + brightness
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("light", {"result": result})
   }
@@ -90,7 +98,8 @@ ruleset Lutron_light {
       fade_time = event:attr("fade_time") || 5
       delay = event:attr("delay") || 0
       command = "#OUTPUT," + ent:IntegrationID + ",5," + fade_time + "," + delay
-      result = telnet:sendCMD(command)
+      result =isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("light", {"result": result})
   }
@@ -99,7 +108,8 @@ ruleset Lutron_light {
     select when lutron stopFlash
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",4"
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("light", {"result": result})
   }

@@ -1,11 +1,14 @@
 ruleset Lutron_area {
   meta {
-    shares __testing, status
+    use module io.picolabs.wrangler alias wrangler
+
+    shares __testing, status, isConnected
   }
   global {
     __testing = { "queries":
       [ { "name": "__testing" },
-        { "name": "status" }
+        { "name": "status" },
+        { "name": "isConnected" }
       //, { "name": "entry", "args": [ "key" ] }
       ] , "events":
       [ { "domain": "lutron", "type": "area_level", "attrs": [ "level/position" ] },
@@ -20,6 +23,10 @@ ruleset Lutron_area {
       response = telnet:query(command);
       percentage = response.extract(re#(\d+)[.]#)[0];
       "Area " + ent:IntegrationID + " level/position: " + percentage
+    }
+
+    isConnected = function() {
+      wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
     }
   }
 
@@ -40,7 +47,8 @@ ruleset Lutron_area {
     select when lutron area_level or lutron area_position
     pre {
       command = "#AREA," + ent:IntegrationID + ",1," + event:attr("level/position")
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("lutron_area", {"result": result})
   }
@@ -49,7 +57,8 @@ ruleset Lutron_area {
     select when lutron area_raise
     pre {
       command = "#AREA," + ent:IntegrationID + ",2"
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("lutron_area", {"result": result})
   }
@@ -58,7 +67,8 @@ ruleset Lutron_area {
     select when lutron area_lower
     pre {
       command = "#AREA," + ent:IntegrationID + ",3"
-      result = telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
+            | "Command Not Sent: Not Logged In"
     }
     send_directive("lutron_area", {"result": result})
   }
