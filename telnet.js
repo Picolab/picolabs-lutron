@@ -14,6 +14,7 @@ var parameters = {
   "passwordPrompt": "password:",
   "username": 'root',
   "password": 'guest',
+  "failedLoginMatch": "bad login",
   "initialLFCR": true,
   "timeout": 150000
 }
@@ -26,8 +27,8 @@ connection.on('ready', function (prompt) {
   console.log('ready!')
 })
 
-connection.on('failedlogin', function (prompt) {
-  console.log('failedlogin event!')
+connection.on('failedlogin', function (msg) {
+  console.log('failedlogin event!', msg)
 })
 
 connection.on('writedone', function (prompt) {
@@ -36,13 +37,6 @@ connection.on('writedone', function (prompt) {
 
 connection.on('connect', function (prompt) {
   console.log('telnet connection established!')
-  connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
-  function (err, response) {
-    if (err) {
-      console.error(err)
-    }
-    console.log('login cmd response', response)
-  })
 })
 
 connection.on('timeout', function () {
@@ -61,7 +55,7 @@ module.exports = function (core) {
       ], function (ctx, args) {
         return getHost()
       }),
-      'connect': mkKRLaction([
+      'connect': mkKRLfn([
         'params'
       ], function (ctx, args) {
         if (!_.has(args, 'params')) {
@@ -76,12 +70,32 @@ module.exports = function (core) {
         })
         try {
           connection.connect(parameters)
+          let res = connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
+          function (err, response) {
+            if (err) {
+              console.error(err)
+              return err
+            }
+            console.log('login cmd response', response)
+            return response
+          })
+          return res
         } catch (err) {
           console.error(err);
           return err
         }
       }),
-      'sendCMD': mkKRLaction([
+      'disconnect': mkKRLfn([
+      ], function (ctx, args) {
+        try {
+          let res = connection.end()
+          return res
+        } catch (err) {
+          console.error(err)
+          return err
+        }
+      }),
+      'sendCMD': mkKRLfn([
         'command'
       ], function (ctx, args) {
         if (!_.has(args, 'command')) {
@@ -115,40 +129,43 @@ module.exports = function (core) {
         })
         return res
       }),
-      'getLightsFromXML':  mkKRLfn([
+      'extractDataFromXML': mkKRLfn([
         'xml'
-      ], function (ctx, args) {
+      ], function(ctx, args) {
         if (!_.has(args, 'xml')) {
-          throw new Error('telnet:getLightsFromXML requires an xml string')
+          throw new Error('telnet:getAreasFromXML requires an xml string')
         }
         var doc = new DOMParser().parseFromString(args.xml)
-        var lightElements = doc.getElementsByTagName("Output")
-        var lights = []
+        var areaElements = doc.getElementsByTagName("Area")
+        var data = {}
 
-        for (i = 0; i < lightElements.length; i++) {
-          var lightID = lightElements[i].getAttribute("IntegrationID")
-          var isShade = lightElements[i].getAttribute("OutputType") == "SYSTEM_SHADE" ? true : false
-          if (!isShade) {
-            lights.push(lightID)
+        for (i = 0; i < areaElements.length; i++) {
+          var areaName = areaElements[i].getAttribute("Name")
+          var areaID = areaElements[i].getAttribute("IntegrationID")
+
+          var outputs = areaElements[i].getElementsByTagName("Outputs")[0]
+          var lightElements = outputs.getElementsByTagName("Output")
+          var lights = []
+          for (j = 0; j < lightElements.length; j++) {
+            var id = lightElements[j].getAttribute("IntegrationID")
+            var isShade = lightElements[j].getAttribute("OutputType") == "SYSTEM_SHADE" ? true : false
+            if (!isShade) {
+              lights.push(id)
+            }
           }
-        }
-        return lights
-      }),
-      'getShadesFromXML':  mkKRLfn([
-        'xml'
-      ], function (ctx, args) {
-        if (!_.has(args, 'xml')) {
-          throw new Error('telnet:getShadesFromXML requires an xml string')
-        }
-        var doc = new DOMParser().parseFromString(args.xml)
-        var shadeElements = doc.getElementsByTagName("ShadeGroup")
-        var shades = []
 
-        for (i = 0; i < shadeElements.length; i++) {
-          var shadeID = shadeElements[i].getAttribute("IntegrationID")
-          shades.push(shadeID)
+          var shadegroups = areaElements[i].getElementsByTagName("ShadeGroups")[0]
+          var shadeElements = shadegroups.getElementsByTagName("ShadeGroup")
+          var shades = []
+          for (j = 0; j < shadeElements.length; j++) {
+            var id = shadeElements[j].getAttribute("IntegrationID")
+            shades.push(id)
+          }
+
+          data[areaName] = {"name": areaName, "id": areaID, "type": "area",
+                            "lights": lights, "shades": shades }
         }
-        return shades
+        return data
       })
     }
   }
