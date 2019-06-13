@@ -7,12 +7,15 @@ ruleset Lutron_shade {
   }
 
   global {
-    __testing = { "queries": [ { "name": "__testing" },
-                              { "name": "status" },
-                              { "name": "isConnected"} ],
-                  "events": [ { "domain": "lutron", "type": "shadesOpen",
-                                "attrs": [ "percentage" ] },
-                              { "domain": "lutron", "type": "shadesClose" } ] }
+    __testing = { "queries":
+      [ { "name": "__testing" },
+        { "name": "status" },
+        { "name": "isConnected"}
+      ],  "events": [
+        { "domain": "lutron", "type": "shades_open", "attrs": [ "percentage" ] },
+        { "domain": "lutron", "type": "shades_close" }
+      ]
+    }
 
     status = function() {
       command = "?SHADEGRP," + ent:IntegrationID + ",1";
@@ -53,7 +56,7 @@ ruleset Lutron_shade {
   }
 
   rule Send_Command_shadeOpen {
-    select when lutron shadesOpen
+    select when lutron shades_open
     pre {
       open_percentage = event:attr("percentage") || 100
       command = "#SHADEGRP," + ent:IntegrationID + ",1," + open_percentage
@@ -64,7 +67,7 @@ ruleset Lutron_shade {
   }
 
   rule Send_Command_shadeClose {
-    select when lutron shadesClose
+    select when lutron shades_close
     pre {
       command = "#SHADEGRP," + ent:IntegrationID + ",1,0"
       result = isConnected() => telnet:sendCMD(command)

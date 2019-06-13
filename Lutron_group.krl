@@ -8,16 +8,14 @@ ruleset Lutron_group {
     __testing = { "queries":
       [ { "name": "__testing" },
         { "name": "isConnected" }
-      //, { "name": "entry", "args": [ "key" ] }
       ] , "events":
-      [ { "domain": "lutron", "type": "groupLightsOn" },
-        { "domain": "lutron", "type": "groupLightsOff" },
-        { "domain": "lutron", "type": "groupLightsBrightness", "attrs": [ "brightness" ] },
-        { "domain": "lutron", "type": "groupLightsFlash", "attrs": [ "fade_time", "delay" ] },
-        { "domain": "lutron", "type": "groupLightsStopFlash" },
-        { "domain": "lutron", "type": "groupShadesOpen", "attrs": [ "percentage" ] },
-        { "domain": "lutron", "type": "groupShadesClose" }
-      //, { "domain": "d2", "type": "t2", "attrs": [ "a1", "a2" ] }
+      [ { "domain": "lutron", "type": "group_lights_on" },
+        { "domain": "lutron", "type": "group_lights_off" },
+        { "domain": "lutron", "type": "group_lights_brightness", "attrs": [ "brightness" ] },
+        { "domain": "lutron", "type": "group_lights_flash", "attrs": [ "fade_time", "delay" ] },
+        { "domain": "lutron", "type": "group_lights_stop_flash" },
+        { "domain": "lutron", "type": "group_shades_open", "attrs": [ "percentage" ] },
+        { "domain": "lutron", "type": "group_shades_close" }
       ]
     }
 
@@ -41,14 +39,14 @@ ruleset Lutron_group {
     }
   }
 
-  rule groupLightsOn {
-    select when lutron groupLightsOn
+  rule group_lights_on {
+    select when lutron group_lights_on
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
       type = (subscriber == "light") => "lightsOn"
-            | (subscriber == "group") => "groupLightsOn"
+            | (subscriber == "group") => "group_lights_on"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
@@ -58,18 +56,18 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
-  rule groupLightsOff {
-    select when lutron groupLightsOff
+  rule group_lights_off {
+    select when lutron group_lights_off
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "lightsOff"
-            | (subscriber == "group") => "groupLightsOff"
+      type = (subscriber == "light") => "lights_off"
+            | (subscriber == "group") => "group_lights_off"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
@@ -79,18 +77,18 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
-  rule groupLightsBrightness {
-    select when lutron groupLightsBrightness
+  rule group_lights_brightness {
+    select when lutron group_lights_brightness
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "setBrightness"
-            | (subscriber == "group") => "groupLightsBrightness"
+      type = (subscriber == "light") => "set_brightness"
+            | (subscriber == "group") => "group_lights_brightness"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
@@ -101,18 +99,18 @@ ruleset Lutron_group {
         "attrs": event:attrs
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
-  rule groupLightsFlash {
-    select when lutron groupLightsFlash
+  rule group_lights_flash {
+    select when lutron group_lights_flash
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
       type = (subscriber == "light") => "flash"
-            | (subscriber == "group") => "groupLightsFlash"
+            | (subscriber == "group") => "group_lights_flash"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
@@ -123,18 +121,18 @@ ruleset Lutron_group {
         "attrs": event:attrs
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
-  rule groupLightsStopFlash {
-    select when lutron groupLightsStopFlash
+  rule group_lights_stop_flash {
+    select when lutron group_lights_stop_flash
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "stopFlash"
-            | (subscriber == "group") => "groupLightsStopFlash"
+      type = (subscriber == "light") => "stop_flash"
+            | (subscriber == "group") => "group_lights_stop_flash"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
@@ -144,18 +142,18 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
-  rule groupShadesOpen {
-    select when lutron groupShadesOpen
+  rule group_shades_open {
+    select when lutron group_shades_open
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "shade") => "shadesOpen"
-            | (subscriber == "group") => "groupShadesOpen"
+      type = (subscriber == "shade") => "shades_open"
+            | (subscriber == "group") => "group_shades_open"
             | "notShade"
     }
     if (type != "notShade" && isConnected()) then
@@ -166,18 +164,18 @@ ruleset Lutron_group {
         "attrs": event:attrs
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
-  rule groupShadesClose {
-    select when lutron groupShadesClose
+  rule group_shades_close {
+    select when lutron group_shades_close
     foreach subscription:established() setting(subscription)
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "shade") => "shadesClose"
-            | (subscriber == "group") => "groupShadesClose"
+      type = (subscriber == "shade") => "shades_close"
+            | (subscriber == "group") => "group_shades_close"
             | "notShade"
     }
     if (type != "notShade" && isConnected()) then
@@ -187,7 +185,7 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "notLoggedIn" if not isConnected()
+      raise lutron event "not_logged_in" if not isConnected()
     }
   }
 
@@ -200,8 +198,8 @@ ruleset Lutron_group {
       })
   }
 
-  rule handleNotLoggedIn {
-    select when lutron notLoggedIn
+  rule handlenot_logged_in {
+    select when lutron not_logged_in
     send_directive("lutron_error", {"message": "Not Logged In"})
     always {
       last

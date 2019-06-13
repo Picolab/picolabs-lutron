@@ -7,30 +7,32 @@ ruleset Lutron_manager {
     provides data, isConnected
   }
   global {
-    __testing = { "queries": [ { "name": "data" },
-                              { "name": "extractData" },
-                              { "name": "isConnected" },
-                              { "name": "getXML" },
-                              { "name": "getLightIDs" },
-                              { "name": "getShadeIDs" },
-                              { "name": "lightIDs" },
-                              { "name": "shadeIDs" },
-                              { "name": "getChildByName", "args": [ "name" ] } ],
-                  "events": [ { "domain": "lutron", "type": "login",
-                                  "attrs": [ "host", "username", "password" ] },
-                              { "domain": "lutron", "type": "logout" },
-                              { "domain": "lutron", "type": "sync_data"},
-                              { "domain": "lutron", "type": "sendCMD",
-                                  "attrs": [ "cmd" ] },
-                              { "domain": "lutron", "type": "create_lights" },
-                              { "domain": "lutron", "type": "create_shades" },
-                              { "domain": "lutron", "type": "create_default_areas" },
-                              { "domain": "lutron", "type": "create_group",
-                                  "attrs": [ "name" ] },
-                              { "domain": "lutron", "type": "add_device_to_group",
-                                  "attrs": [ "deviceName", "groupName" ] },
-                              { "domain": "lutron", "type": "add_group_to_group",
-                                  "attrs": [ "childGroupName", "parentGroupName" ] } ] }
+    __testing = { "queries":
+      [ { "name": "data" },
+        { "name": "extractData" },
+        { "name": "isConnected" },
+        { "name": "getXML" },
+        { "name": "getLightIDs" },
+        { "name": "getShadeIDs" },
+        { "name": "lightIDs" },
+        { "name": "shadeIDs" },
+        { "name": "getChildByName", "args": [ "name" ] }
+      ],  "events": [ { "domain": "lutron", "type": "login",
+                    "attrs": [ "host", "username", "password" ] },
+        { "domain": "lutron", "type": "logout" },
+        { "domain": "lutron", "type": "sync_data"},
+        { "domain": "lutron", "type": "sendCMD", "attrs": [ "cmd" ] },
+        { "domain": "lutron", "type": "create_lights" },
+        { "domain": "lutron", "type": "create_shades" },
+        { "domain": "lutron", "type": "create_default_areas" },
+        { "domain": "lutron", "type": "create_group", "attrs": [ "name" ] },
+        { "domain": "lutron", "type": "add_device_to_group",
+                    "attrs": [ "device_name", "group_name" ] },
+        { "domain": "lutron", "type": "add_group_to_group",
+                    "attrs": [ "child_group_name", "parent_group_name" ] }
+      ]
+    }
+    
     data = function() {
       ent:data
     }
@@ -230,9 +232,9 @@ ruleset Lutron_manager {
   rule add_device_to_group {
     select when lutron add_device_to_group
     pre {
-      device_eci = getChildByName(event:attr("deviceName")){"eci"}.klog("device_eci")
-      group_eci = getChildByName(event:attr("groupName")){"eci"}.klog("group_eci")
-      device_type = event:attr("deviceName").substr(0,5)
+      device_eci = getChildByName(event:attr("device_name")){"eci"}.klog("device_eci")
+      group_eci = getChildByName(event:attr("group_name")){"eci"}.klog("group_eci")
+      device_type = event:attr("device_name").substr(0,5)
     }
     if (device_eci && group_eci) then
     event:send(
@@ -240,7 +242,7 @@ ruleset Lutron_manager {
         "eci": group_eci, "eid": "subscription",
         "domain": "wrangler", "type": "subscription",
         "attrs": {
-          "name": event:attr("deviceName"),
+          "name": event:attr("device_name"),
           "Rx_role": "controller",
           "Tx_role": device_type,
           "channel_type": "subscription",
@@ -250,15 +252,15 @@ ruleset Lutron_manager {
 
     notfired {
       raise lutron event "error"
-        attributes {"message": "Invalid deviceName or groupName"}
+        attributes {"message": "Invalid device_name or group_name"}
     }
   }
 
   rule add_group_to_group {
     select when lutron add_group_to_group
     pre {
-      child_group_eci = getChildByName(event:attr("childGroupName")){"eci"}.klog("child_eci")
-      parent_group_eci = getChildByName(event:attr("parentGroupName")){"eci"}.klog("parent_eci")
+      child_group_eci = getChildByName(event:attr("child_group_name")){"eci"}.klog("child_eci")
+      parent_group_eci = getChildByName(event:attr("parent_group_name")){"eci"}.klog("parent_eci")
     }
     if (child_group_eci && parent_group_eci) then
     event:send(
@@ -266,7 +268,7 @@ ruleset Lutron_manager {
         "eci": parent_group_eci, "eid": "subscription",
         "domain": "wrangler", "type": "subscription",
         "attrs": {
-          "name": event:attr("childGroupName"),
+          "name": event:attr("child_group_name"),
           "Rx_role": "controller",
           "Tx_role": "group",
           "channel_type": "subscription",
@@ -276,7 +278,7 @@ ruleset Lutron_manager {
 
     notfired {
       raise lutron event "error"
-        attributes {"message": "Invalid childGroupName or parentGroupName"}
+        attributes {"message": "Invalid child_group_name or parent_group_name"}
     }
   }
 

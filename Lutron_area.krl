@@ -9,12 +9,10 @@ ruleset Lutron_area {
       [ { "name": "__testing" },
         { "name": "status" },
         { "name": "isConnected" }
-      //, { "name": "entry", "args": [ "key" ] }
       ] , "events":
       [ { "domain": "lutron", "type": "area_level", "attrs": [ "level/position" ] },
         { "domain": "lutron", "type": "area_raise" },
         { "domain": "lutron", "type": "area_lower" }
-      //, { "domain": "d2", "type": "t2", "attrs": [ "a1", "a2" ] }
       ]
     }
 

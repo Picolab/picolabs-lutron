@@ -6,18 +6,18 @@ ruleset Lutron_light {
     provides __testing, status
   }
   global {
-    __testing = { "queries": [ { "name": "status" },
-                              { "name": "isConnected" } ],
-                  "events": [ { "domain": "lutron", "type": "lightsOn",
-                                "attrs": [  ] },
-                              { "domain": "lutron", "type": "lightsOff",
-                                "attrs": [  ] },
-                              { "domain": "lutron", "type": "setBrightness",
-                                "attrs": [ "brightness" ] },
-                              { "domain": "lutron", "type": "flash",
-                                "attrs": [ "fade_time", "delay" ] },
-                              { "domain": "lutron", "type": "stopFlash",
-                                "attrs": [ ] } ]}
+    __testing = { "queries":
+      [ { "name": "status" },
+        { "name": "isConnected" }
+      ],  "events":
+      [ { "domain": "lutron", "type": "lights_on", "attrs": [  ] },
+        { "domain": "lutron", "type": "lights_off", "attrs": [  ] },
+        { "domain": "lutron", "type": "set_brightness", "attrs": [ "brightness" ] },
+        { "domain": "lutron", "type": "flash", "attrs": [ "fade_time", "delay" ] },
+        { "domain": "lutron", "type": "stop_flash", "attrs": [ ] }
+      ]
+    }
+    
     brightness = function() {
       command = "?OUTPUT," + ent:IntegrationID + ",1";
       response = telnet:query(command);
@@ -46,7 +46,7 @@ ruleset Lutron_light {
     }
   }
 
-  rule autoAccept {
+  rule auto_accept {
     select when wrangler inbound_pending_subscription_added
     pre {
       attrs = event:attrs.klog("subscription: ");
@@ -61,8 +61,8 @@ ruleset Lutron_light {
     }
   }
 
-  rule Send_Command_lightsOn {
-    select when lutron lightsOn
+  rule lights_on {
+    select when lutron lights_on
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",1,100"
       result = isConnected() => telnet:sendCMD(command)
@@ -71,8 +71,8 @@ ruleset Lutron_light {
     send_directive("light", {"result": result})
   }
 
-  rule Send_Command_lightsOff {
-    select when lutron lightsOff
+  rule lights_off {
+    select when lutron lights_off
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",1,0"
       result = isConnected() => telnet:sendCMD(command)
@@ -81,8 +81,8 @@ ruleset Lutron_light {
     send_directive("light", {"result": result})
   }
 
-  rule Send_Command_setBrightness {
-    select when lutron setBrightness
+  rule set_brightness {
+    select when lutron set_brightness
     pre {
       brightness = event:attr("brightness").defaultsTo(brightness())
       command = "#OUTPUT," + ent:IntegrationID + ",1," + brightness
@@ -92,20 +92,20 @@ ruleset Lutron_light {
     send_directive("light", {"result": result})
   }
 
-  rule Send_Command_flash {
+  rule flash {
     select when lutron flash
     pre {
       fade_time = event:attr("fade_time") || 5
       delay = event:attr("delay") || 0
       command = "#OUTPUT," + ent:IntegrationID + ",5," + fade_time + "," + delay
-      result =isConnected() => telnet:sendCMD(command)
+      result = isConnected() => telnet:sendCMD(command)
             | "Command Not Sent: Not Logged In"
     }
     send_directive("light", {"result": result})
   }
 
-  rule Send_Command_stopFlash {
-    select when lutron stopFlash
+  rule stop_flash {
+    select when lutron stop_flash
     pre {
       command = "#OUTPUT," + ent:IntegrationID + ",4"
       result = isConnected() => telnet:sendCMD(command)
