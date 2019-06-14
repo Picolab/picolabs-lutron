@@ -32,7 +32,7 @@ ruleset Lutron_manager {
                     "attrs": [ "child_group_name", "parent_group_name" ] }
       ]
     }
-    
+
     data = function() {
       ent:data
     }
@@ -79,6 +79,26 @@ ruleset Lutron_manager {
         x{"name"} == name
       })[0]
     }
+    app = {"name":"Lutron Manager","version":"0.0"/* img: , pre: , ..*/};
+    // image url: https://serenaprouat.lutron.com/media/wysiwyg/img_logo_lutron.gif
+
+    bindings = function() {
+      {
+        // "lights": lightIDs(),
+        // "shades": shadeIDs(),
+        // "isConnected": isConnected()
+      }
+    }
+  }
+
+  rule discovery {
+    select when manifold apps
+    send_directive("lutron app discovered...",
+      { "app": app,
+        "iconURL": "https://lh3.ggpht.com/CIySCkIa6cshHVwZzEkpEyBtIfWWLLJ_w8GBKuUQRk8iXkB6sg9FbE5ZTNuuMJKRrw=s360-rw",
+        "rid": meta:rid,
+        "bindings": bindings()
+      });
   }
 
   rule lutron_online {
