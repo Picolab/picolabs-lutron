@@ -123,10 +123,11 @@ ruleset Lutron_manager {
                 "timeout": 150000 }
       result = telnet:connect(params)
       status = (result.extract(re#(QNET>+)#)[0]).klog("extracted") => "success" | "failed"
+      isConnected = (status == "success") => true | false
     }
-    send_directive("telnet", {"status": status, "result": result})
+    send_directive("telnet", {"status": status, "isConnected": isConnected, "result": result})
     fired {
-      ent:isConnected := true if status == "success";
+      ent:isConnected := true if isConnected;
       raise lutron event "sync_data" if ent:isConnected
     }
   }
@@ -210,8 +211,9 @@ ruleset Lutron_manager {
       name = area{"name"}
       id = area{"id"}
       lights = area{"lights"}
+      exists = ent:areas.any(function(x) { x == name })
     }
-    if (lights != []) then noop()
+    if (lights != []) && (not exists) then noop()
     fired {
       raise wrangler event "child_creation"
         attributes {
@@ -222,14 +224,14 @@ ruleset Lutron_manager {
           "rids": [
             "Lutron_area"
             ]
-        }
+        };
+      ent:areas := ent:areas.defaultsTo([]).append(name)
     }
   }
 
   rule create_lutron_group {
     select when lutron create_group
     pre {
-      sequence = ent:numGroups.defaultsTo(0) + 1
       name = event:attr("name") || false
     }
     if name then noop()
@@ -242,6 +244,7 @@ ruleset Lutron_manager {
             "Lutron_group"
             ]
         };
+      ent:groups := ent:groups.defaultsTo([]).append(name)
     }
     else {
       raise lutron event "error"
