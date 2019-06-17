@@ -2,7 +2,7 @@ ruleset Lutron_manager {
   meta {
     use module io.picolabs.wrangler alias wrangler
 
-    shares __testing, data, extractData, getXML, getLightIDs, getShadeIDs, getAreaIDs,
+    shares __testing, data, extractData, fetchXML, fetchLightIDs, fetchShadeIDs,
             isConnected, lightIDs, shadeIDs, getChildByName
     provides data, isConnected
   }
@@ -11,9 +11,9 @@ ruleset Lutron_manager {
       [ { "name": "data" },
         { "name": "extractData" },
         { "name": "isConnected" },
-        { "name": "getXML" },
-        { "name": "getLightIDs" },
-        { "name": "getShadeIDs" },
+        { "name": "fetchXML" },
+        { "name": "fetchLightIDs" },
+        { "name": "fetchShadeIDs" },
         { "name": "lightIDs" },
         { "name": "shadeIDs" },
         { "name": "getChildByName", "args": [ "name" ] }
@@ -37,17 +37,17 @@ ruleset Lutron_manager {
       ent:data
     }
     extractData = function() {
-      xml = getXML();
+      xml = fetchXML();
       telnet:extractDataFromXML(xml)
     }
     isConnected = function() {
       ent:isConnected.defaultsTo(false)
     }
-    getXML = function() {
+    fetchXML = function() {
       url = "http://" + telnet:host().klog("host") + "/DbXmlInfo.xml";
       http:get(url){"content"}
     }
-    getLightIDs = function() {
+    fetchLightIDs = function() {
       ent:data.map(function(v,k) {
         v{"lights"}
       }).filter(function(v,k) {
@@ -56,7 +56,7 @@ ruleset Lutron_manager {
         a.append(b)
       })
     }
-    getShadeIDs = function() {
+    fetchShadeIDs = function() {
       ent:data.map(function(v,k) {
         v{"shades"}
       }).filter(function(v,k) {
@@ -162,7 +162,7 @@ ruleset Lutron_manager {
 
   rule create_light_picos {
     select when lutron create_lights
-    foreach getLightIDs() setting(light)
+    foreach fetchLightIDs() setting(light)
     pre {
       name = "Light " + light
       exists = ent:lightIDs.any(function(x) { x == light })
@@ -184,7 +184,7 @@ ruleset Lutron_manager {
 
   rule create_shade_picos {
     select when lutron create_shades
-    foreach getShadeIDs() setting(shade)
+    foreach fetchShadeIDs() setting(shade)
     pre {
       name = "Shade " + shade
       exists = ent:shadeIDs.any(function(x) { x == shade })
