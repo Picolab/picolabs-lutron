@@ -3,8 +3,8 @@ ruleset Lutron_manager {
     use module io.picolabs.wrangler alias wrangler
 
     shares __testing, data, extractData, fetchXML, fetchLightIDs, fetchShadeIDs,
-            isConnected, lightIDs, shadeIDs, getChildByName
-    provides data, isConnected
+            fetchAreas, isConnected, lightIDs, shadeIDs, areas, getChildByName
+    provides data, isConnected, lightIDs, shadeIDs, areas
   }
   global {
     __testing = { "queries":
@@ -14,8 +14,10 @@ ruleset Lutron_manager {
         { "name": "fetchXML" },
         { "name": "fetchLightIDs" },
         { "name": "fetchShadeIDs" },
+        { "name": "fetchAreas" },
         { "name": "lightIDs" },
         { "name": "shadeIDs" },
+        { "name": "areas" },
         { "name": "getChildByName", "args": [ "name" ] }
       ],  "events": [ { "domain": "lutron", "type": "login",
                     "attrs": [ "host", "username", "password" ] },
@@ -65,14 +67,17 @@ ruleset Lutron_manager {
         a.append(b)
       })
     }
+    fetchAreas = function() {
+      ent:data.keys()
+    }
     lightIDs = function() {
       ent:lightIDs
     }
     shadeIDs = function() {
       ent:shadeIDs
     }
-    areaIDs = function() {
-      ent:areaIDs
+    areas = function() {
+      ent:areas
     }
     getChildByName = function(name) {
       wrangler:children().filter(function(x) {
@@ -128,7 +133,7 @@ ruleset Lutron_manager {
     send_directive("telnet", {"status": status, "isConnected": isConnected, "result": result})
     fired {
       ent:isConnected := true if isConnected;
-      raise lutron event "sync_data" if ent:isConnected
+      raise lutron event "sync_data" if isConnected
     }
   }
 
@@ -146,9 +151,15 @@ ruleset Lutron_manager {
     select when lutron sync_data
     pre {
       data = extractData()
+      update_lights = ((ent:lightIDs <=> fetchLightIDs) == 1).klog("update_lights:")
+      update_shades = ((ent:lightIDs <=> fetchShadeIDs) == 1).klog("update_shades:")
+      update_areas =  ((ent:lightIDs cmp fetchAreas) == 1).klog("update_areas")
     }
     always {
-      ent:data := data
+      ent:data := data;
+      raise lutron event "create_lights" if update_lights;
+      raise lutron event "create_shades" if update_shades;
+      raise lutron event "create_default_areas" if update_areas
     }
   }
 
