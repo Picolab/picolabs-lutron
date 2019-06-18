@@ -24,7 +24,7 @@ ruleset Lutron_group {
     }
   }
 
-  rule autoAccept {
+  rule auto_accept {
     select when wrangler inbound_pending_subscription_added
     pre {
       attrs = event:attrs.klog("subscription: ");
@@ -56,7 +56,9 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 
@@ -77,7 +79,9 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 
@@ -99,7 +103,9 @@ ruleset Lutron_group {
         "attrs": event:attrs
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 
@@ -121,7 +127,9 @@ ruleset Lutron_group {
         "attrs": event:attrs
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 
@@ -142,7 +150,9 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 
@@ -164,7 +174,9 @@ ruleset Lutron_group {
         "attrs": event:attrs
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 
@@ -185,24 +197,9 @@ ruleset Lutron_group {
         "domain": "lutron", "type": type
       })
     notfired {
-      raise lutron event "not_logged_in" if not isConnected()
-    }
-  }
-
-  rule updateManagerGroupCount {
-    select when wrangler deletion_imminent
-    event:send(
-      {
-        "eci": wrangler:parent_eci(), "eid": "decrement_group_count",
-        "domain": "lutron", "type": "decrement_group_count"
-      })
-  }
-
-  rule handlenot_logged_in {
-    select when lutron not_logged_in
-    send_directive("lutron_error", {"message": "Not Logged In"})
-    always {
-      last
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+          if not isConnected()
     }
   }
 }
