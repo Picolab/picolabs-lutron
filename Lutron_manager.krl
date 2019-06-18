@@ -71,13 +71,13 @@ ruleset Lutron_manager {
       ent:data.keys()
     }
     lightIDs = function() {
-      ent:lightIDs
+      ent:lightIDs.defaultsTo([])
     }
     shadeIDs = function() {
-      ent:shadeIDs
+      ent:shadeIDs.defaultsTo([])
     }
     areas = function() {
-      ent:areas
+      ent:areas.defaultsTo([])
     }
     getChildByName = function(name) {
       wrangler:children().filter(function(x) {
