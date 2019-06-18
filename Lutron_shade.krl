@@ -29,6 +29,7 @@ ruleset Lutron_shade {
       wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
     }
   }
+
   rule initialize {
     select when wrangler ruleset_added where event:attr("rids") >< meta:rid
     pre {
@@ -40,7 +41,7 @@ ruleset Lutron_shade {
     }
   }
 
-  rule autoAccept {
+  rule auto_accept {
     select when wrangler inbound_pending_subscription_added
     pre {
       attrs = event:attrs.klog("subscription: ");
@@ -55,24 +56,36 @@ ruleset Lutron_shade {
     }
   }
 
-  rule Send_Command_shadeOpen {
+  rule shades_open {
     select when lutron shades_open
     pre {
       open_percentage = event:attr("percentage") || 100
       command = "#SHADEGRP," + ent:IntegrationID + ",1," + open_percentage
-      result = isConnected() => telnet:sendCMD(command)
-            | "Command Not Sent: Not Logged In"
     }
-    send_directive("shade", {"result": result})
+    if isConnected() then
+      every {
+        telnet:sendCMD(command) setting(result)
+        send_directive("shade", {"result": result})
+      }
+    notfired {
+      raise lutron event "error"
+        attributes { "message": "Command Not Sent: Not Logged In" }
+    }
   }
 
-  rule Send_Command_shadeClose {
+  rule shades_close {
     select when lutron shades_close
     pre {
       command = "#SHADEGRP," + ent:IntegrationID + ",1,0"
-      result = isConnected() => telnet:sendCMD(command)
-            | "Command Not Sent: Not Logged In"
     }
-    send_directive("shade", {"result": result})
+    if isConnected() then
+      every {
+        telnet:sendCMD(command) setting(result)
+        send_directive("shade", {"result": result})
+      }
+    notfired {
+      raise lutron event "error"
+        attributes { "message": "Command Not Sent: Not Logged In" }
+    }
   }
 }

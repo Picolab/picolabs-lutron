@@ -55,7 +55,7 @@ module.exports = function (core) {
       ], function (ctx, args) {
         return getHost()
       }),
-      'connect': mkKRLfn([
+      'connect': mkKRLaction([
         'params'
       ], function (ctx, args) {
         if (!_.has(args, 'params')) {
@@ -85,7 +85,7 @@ module.exports = function (core) {
           return err
         }
       }),
-      'disconnect': mkKRLfn([
+      'disconnect': mkKRLaction([
       ], function (ctx, args) {
         try {
           let res = connection.end()
@@ -95,7 +95,7 @@ module.exports = function (core) {
           return err
         }
       }),
-      'sendCMD': mkKRLfn([
+      'sendCMD': mkKRLaction([
         'command'
       ], function (ctx, args) {
         if (!_.has(args, 'command')) {

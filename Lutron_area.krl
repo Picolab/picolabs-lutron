@@ -45,29 +45,47 @@ ruleset Lutron_area {
     select when lutron area_level or lutron area_position
     pre {
       command = "#AREA," + ent:IntegrationID + ",1," + event:attr("level/position")
-      result = isConnected() => telnet:sendCMD(command)
-            | "Command Not Sent: Not Logged In"
     }
-    send_directive("lutron_area", {"result": result})
+    if isConnected() then
+      every {
+        telnet:sendCMD(command) setting(result)
+        send_directive("lutron_area", {"result": result})
+      }
+    notfired {
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+    }
   }
 
   rule raise {
     select when lutron area_raise
     pre {
       command = "#AREA," + ent:IntegrationID + ",2"
-      result = isConnected() => telnet:sendCMD(command)
-            | "Command Not Sent: Not Logged In"
     }
-    send_directive("lutron_area", {"result": result})
+    if isConnected() then
+      every {
+        telnet:sendCMD(command) setting(result)
+        send_directive("lutron_area", {"result": result})
+      }
+    notfired {
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+    }
   }
 
   rule lower {
     select when lutron area_lower
     pre {
       command = "#AREA," + ent:IntegrationID + ",3"
-      result = isConnected() => telnet:sendCMD(command)
-            | "Command Not Sent: Not Logged In"
     }
-    send_directive("lutron_area", {"result": result})
+    if isConnected() then
+      every {
+        telnet:sendCMD(command) setting(result)
+        send_directive("lutron_area", {"result": result})
+      }
+    notfired {
+      raise lutron event "error"
+        attributes {"message": "Command Not Sent: Not Logged In"}
+    }
   }
 }

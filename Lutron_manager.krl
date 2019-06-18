@@ -126,11 +126,24 @@ ruleset Lutron_manager {
                 "failedLoginMatch": "bad login",
                 "initialLFCR": true,
                 "timeout": 150000 }
-      result = telnet:connect(params)
-      status = (result.extract(re#(QNET>+)#)[0]).klog("extracted") => "success" | "failed"
+    }
+    telnet:connect(params) setting(response)
+    always {
+      raise lutron event "evaluate_login_response"
+        attributes { "response": response }
+    }
+  }
+
+  rule evaluate_login_response {
+    select when lutron evaluate_login_response
+    pre {
+      resp = event:attr("response")
+      status = (resp.extract(re#(QNET>+)#)[0]).klog("extracted") => "success" | "failed"
       isConnected = (status == "success") => true | false
     }
-    send_directive("telnet", {"status": status, "isConnected": isConnected, "result": result})
+    send_directive("login_attempt",
+      {"status": status, "isConnected": isConnected, "result": resp}
+    )
     fired {
       ent:isConnected := true if isConnected;
       raise lutron event "sync_data" if isConnected
@@ -139,10 +152,8 @@ ruleset Lutron_manager {
 
   rule logout {
     select when lutron logout
-    pre {
-      result = telnet:disconnect()
-    }
-    always {
+    telnet:disconnect()
+    fired {
       ent:isConnected := false
     }
   }
@@ -165,10 +176,10 @@ ruleset Lutron_manager {
 
   rule send_command {
     select when lutron sendCMD
-    pre {
-      result = telnet:sendCMD(event:attr("cmd"))
+    every {
+      telnet:sendCMD(event:attr("cmd")) setting(result)
+      send_directive("command",{"result": result})
     }
-    send_directive("command",{"result": result})
   }
 
   rule create_light_picos {
