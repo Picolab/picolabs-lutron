@@ -3,22 +3,24 @@ ruleset Lutron_manager {
     use module io.picolabs.wrangler alias wrangler
 
     shares __testing, data, extractData, fetchXML, fetchLightIDs, fetchShadeIDs,
-            fetchAreas, isConnected, lightIDs, shadeIDs, areas, getChildByName
-    provides data, isConnected, lightIDs, shadeIDs, areas
+            fetchAreas, isConnected, lightIDs, shadeIDs, areas, getChildByName, allIDs, devicesAndDetails
+    provides data, isConnected, lightIDs, shadeIDs, areas, allIDs, devicesAndDetails
   }
   global {
     __testing = { "queries":
-      [ { "name": "data" },
-        { "name": "extractData" },
+      [ { "name": "allIDs" },
+        { "name": "data" },
+        // { "name": "extractData" },
         { "name": "isConnected" },
-        { "name": "fetchXML" },
-        { "name": "fetchLightIDs" },
-        { "name": "fetchShadeIDs" },
-        { "name": "fetchAreas" },
+        // { "name": "fetchXML" },
+        // { "name": "fetchLightIDs" },
+        // { "name": "fetchShadeIDs" },
+        // { "name": "fetchAreas" },
         { "name": "lightIDs" },
         { "name": "shadeIDs" },
         { "name": "areas" },
-        { "name": "getChildByName", "args": [ "name" ] }
+        // { "name": "getChildByName", "args": [ "name" ] },
+        { "name": "devicesAndDetails" }
       ],  "events": [ { "domain": "lutron", "type": "login",
                     "attrs": [ "host", "username", "password" ] },
         { "domain": "lutron", "type": "logout" },
@@ -34,20 +36,33 @@ ruleset Lutron_manager {
                     "attrs": [ "child_group_name", "parent_group_name" ] }
       ]
     }
+    DEFAULT_TIMEOUT = 30; // minutes after login till automatic logout
+    allIDs = function() {
+      areas = areas();
+      lights = lightIDs();
+      shades = shadeIDs();
 
+      { "areas": areas, "lights": lights, "shades": shades }
+    }
     data = function() {
+      // area data since last login
       ent:data
     }
     extractData = function() {
       xml = fetchXML();
+      // grabs area names, and light and shade integration ids from an xml file
       telnet:extractDataFromXML(xml)
     }
     isConnected = function() {
       ent:isConnected.defaultsTo(false)
     }
     fetchXML = function() {
+      // lutron provided host for xml data
       url = "http://" + telnet:host().klog("host") + "/DbXmlInfo.xml";
       http:get(url){"content"}
+    }
+    fetchAreas = function() {
+      ent:data.keys()
     }
     fetchLightIDs = function() {
       ent:data.map(function(v,k) {
@@ -67,8 +82,8 @@ ruleset Lutron_manager {
         a.append(b)
       })
     }
-    fetchAreas = function() {
-      ent:data.keys()
+    areas = function() {
+      ent:areas.defaultsTo([])
     }
     lightIDs = function() {
       ent:lightIDs.defaultsTo([])
@@ -76,13 +91,42 @@ ruleset Lutron_manager {
     shadeIDs = function() {
       ent:shadeIDs.defaultsTo([])
     }
-    areas = function() {
-      ent:areas.defaultsTo([])
-    }
     getChildByName = function(name) {
       wrangler:children().filter(function(x) {
         x{"name"} == name
       })[0]
+    }
+    devicesAndDetails = function() {
+      // lists areas, lights, and shades with their appropriate eci's and display names
+      areas = areas().map(function(x) {
+        child = getChildByName(x);
+        eci = child{"eci"};
+        {}.put(x, {"id": x, "type": "area", "eci": eci})
+      }).reduce(function(a,b) {
+        a.put(b)
+      });
+
+      lights = lightIDs().map(function(x) {
+        child = getChildByName("Light " + x);
+        eci = child{"eci"};
+        name = wrangler:skyQuery(eci, "io.picolabs.visual_params", "dname");
+        {}.put(x, {"id": x, "type": "light", "name": name, "brightness": brightness, "eci": eci})
+      }).reduce(function(a,b) {
+        a.put(b)
+      });
+
+      shades = shadeIDs().map(function(x) {
+        child = getChildByName("Shade " + x);
+        eci = child{"eci"};
+        name = wrangler:skyQuery(eci, "io.picolabs.visual_params", "dname");
+        {}.put(x, {"id": x, "type": "shade", "name": name, "eci": eci})
+      }).reduce(function(a,b) {
+        a.put(b)
+      });
+
+      { "areas": areas, "lights": lights, "shades": shades }.reduce(function(a,b) {
+        a.put(b)
+      },[])
     }
     app = {"name":"Lutron Manager","version":"0.0"/* img: , pre: , ..*/};
     // image url: https://serenaprouat.lutron.com/media/wysiwyg/img_logo_lutron.gif
@@ -125,7 +169,7 @@ ruleset Lutron_manager {
                 "password": event:attr("password"),
                 "failedLoginMatch": "bad login",
                 "initialLFCR": true,
-                "timeout": 150000 }
+                "timeout": 1500000 }
     }
     telnet:connect(params) setting(response)
     always {
@@ -146,7 +190,10 @@ ruleset Lutron_manager {
     )
     fired {
       ent:isConnected := true if isConnected;
-      raise lutron event "sync_data" if isConnected
+      raise lutron event "sync_data" if isConnected;
+      schedule lutron event "logout"
+        at time:add(time:now(), {"minutes": DEFAULT_TIMEOUT })
+        if isConnected
     }
   }
 
@@ -163,22 +210,25 @@ ruleset Lutron_manager {
     pre {
       data = extractData()
       update_lights = ((ent:lightIDs <=> fetchLightIDs) == 1).klog("update_lights:")
-      update_shades = ((ent:lightIDs <=> fetchShadeIDs) == 1).klog("update_shades:")
-      update_areas =  ((ent:lightIDs cmp fetchAreas) == 1).klog("update_areas")
+      update_shades = ((ent:shadeIDs <=> fetchShadeIDs) == 1).klog("update_shades:")
+      update_areas =  ((ent:areas cmp fetchAreas) == 1).klog("update_areas")
     }
     always {
       ent:data := data;
       raise lutron event "create_lights" if update_lights;
       raise lutron event "create_shades" if update_shades;
-      raise lutron event "create_default_areas" if update_areas
+      raise lutron event "create_default_areas" if update_areas;
     }
   }
 
   rule send_command {
     select when lutron sendCMD
-    every {
+    if isConnected() then every {
       telnet:sendCMD(event:attr("cmd")) setting(result)
-      send_directive("command",{"result": result})
+      send_directive(result)
+    }
+    notfired {
+      raise lutron event "error" attributes { "message": "you are not logged in" }
     }
   }
 

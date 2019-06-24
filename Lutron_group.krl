@@ -2,12 +2,14 @@ ruleset Lutron_group {
   meta {
     use module io.picolabs.subscription alias subscription
     use module io.picolabs.wrangler alias wrangler
-    shares __testing, isConnected
+    shares __testing, isConnected, devicesAndDetails
+    provides devicesAndDetails
   }
   global {
     __testing = { "queries":
       [ { "name": "__testing" },
-        { "name": "isConnected" }
+        { "name": "isConnected" },
+        { "name": "devicesAndDetails" }
       ] , "events":
       [ { "domain": "lutron", "type": "group_lights_on" },
         { "domain": "lutron", "type": "group_lights_off" },
@@ -21,6 +23,15 @@ ruleset Lutron_group {
 
     isConnected = function() {
       wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
+    }
+
+    devicesAndDetails = function() {
+      subscription:established().map(function(x) {
+        name = wrangler:skyQuery(x{"Tx"}, "io.picolabs.visual_params", "dname");
+        {}.put(name, {"name": name, "type": x{"Tx_role"}.lc(), "eci": x{"Tx"}})
+      }).reduce(function(a,b) {
+        a.put(b)
+      })
     }
   }
 
