@@ -175,7 +175,7 @@ ruleset Lutron_manager {
   rule login {
     select when lutron login
     pre {
-      sehllPrompt = "QNET>"
+      shellPrompt = "QNET>"
       params = {"host": event:attr("host"),
                 "port": 23,
                 "shellPrompt": shellPrompt,
