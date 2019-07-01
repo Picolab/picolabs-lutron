@@ -36,7 +36,6 @@ ruleset Lutron_manager {
                     "attrs": [ "child_group_name", "parent_group_name" ] }
       ]
     }
-    DEFAULT_TIMEOUT = 30; // minutes after login till automatic logout
     allIDs = function() {
       areas = areas();
       lights = lightIDs();
@@ -62,7 +61,9 @@ ruleset Lutron_manager {
       http:get(url){"content"}
     }
     fetchAreas = function() {
-      ent:data.keys()
+      ent:data.filter(function(v,k) {
+        v{"lights"}.length() > 0
+      }).keys()
     }
     fetchLightIDs = function() {
       ent:data.map(function(v,k) {
@@ -96,8 +97,12 @@ ruleset Lutron_manager {
         x{"name"} == name
       })[0]
     }
+    arraysAreEqual = function(a,b) {
+      a.length() != b.length() => false |
+      [a, b].pairwise(function(x, y) {x == y}).all(function(x) {x == true})
+    }
     devicesAndDetails = function() {
-      // lists areas, lights, and shades with their appropriate eci's and display names
+      // lists areas, lights, shades, and groups with their appropriate eci's and display names
       areas = areas().map(function(x) {
         child = getChildByName(x);
         eci = child{"eci"};
@@ -124,9 +129,19 @@ ruleset Lutron_manager {
         a.put(b)
       });
 
-      { "areas": areas, "lights": lights, "shades": shades }.reduce(function(a,b) {
+      groups = ent:groups.defaultsTo([]).map(function(x) {
+        child = getChildByName(x);
+        eci = child{"eci"};
+        name = x;
+        {}.put(x, {"id": x, "type": "group", "name": name, "eci": eci})
+      }).reduce(function(a,b) {
+        a.put(b)
+      });
+
+      { "areas": areas, "lights": lights, "shades": shades, "groups": groups }.reduce(function(a,b) {
         a.put(b)
       },[])
+
     }
     app = {"name":"Lutron Manager","version":"0.0"/* img: , pre: , ..*/};
     // image url: https://serenaprouat.lutron.com/media/wysiwyg/img_logo_lutron.gif
@@ -160,9 +175,10 @@ ruleset Lutron_manager {
   rule login {
     select when lutron login
     pre {
+      sehllPrompt = "QNET>"
       params = {"host": event:attr("host"),
                 "port": 23,
-                "shellPrompt": "QNET>",
+                "shellPrompt": shellPrompt,
                 "loginPrompt": "login:",
                 "passwordPrompt": "password:",
                 "username": event:attr("username"),
@@ -171,10 +187,15 @@ ruleset Lutron_manager {
                 "initialLFCR": true,
                 "timeout": 1500000 }
     }
-    telnet:connect(params) setting(response)
-    always {
+    every {
+      telnet:connect(params) setting(response)
+      send_directive("login_attempt",
+        {"isConnected": response.match(shellPrompt), "result": response})
+    }
+
+    fired {
       raise lutron event "evaluate_login_response"
-        attributes { "response": response }
+        attributes {"isConnected": response.match(shellPrompt), "response": response }
     }
   }
 
@@ -182,18 +203,12 @@ ruleset Lutron_manager {
     select when lutron evaluate_login_response
     pre {
       resp = event:attr("response")
-      status = (resp.extract(re#(QNET>+)#)[0]).klog("extracted") => "success" | "failed"
-      isConnected = (status == "success") => true | false
+      isConnected = event:attr("isConnected");
     }
-    send_directive("login_attempt",
-      {"status": status, "isConnected": isConnected, "result": resp}
-    )
+    if isConnected then noop()
     fired {
-      ent:isConnected := true if isConnected;
-      raise lutron event "sync_data" if isConnected;
-      schedule lutron event "logout"
-        at time:add(time:now(), {"minutes": DEFAULT_TIMEOUT })
-        if isConnected
+      ent:isConnected := true;
+      raise lutron event "sync_data" if (lightIDs().length() == 0)
     }
   }
 
@@ -209,9 +224,9 @@ ruleset Lutron_manager {
     select when lutron sync_data
     pre {
       data = extractData()
-      update_lights = ((ent:lightIDs <=> fetchLightIDs) == 1).klog("update_lights:")
-      update_shades = ((ent:shadeIDs <=> fetchShadeIDs) == 1).klog("update_shades:")
-      update_areas =  ((ent:areas cmp fetchAreas) == 1).klog("update_areas")
+      update_lights = (not arraysAreEqual(ent:lightIDs, fetchLightIDs())).klog("update_lights:")
+      update_shades = (not arraysAreEqual(ent:shadeIDs, fetchShadeIDs())).klog("update_shades:")
+      update_areas =  (not arraysAreEqual(ent:areas, fetchAreas())).klog("update_areas")
     }
     always {
       ent:data := data;
@@ -237,7 +252,7 @@ ruleset Lutron_manager {
     foreach fetchLightIDs() setting(light)
     pre {
       name = "Light " + light
-      exists = ent:lightIDs.any(function(x) { x == light })
+      exists = ent:lightIDs >< light
     }
     if not exists then noop()
     fired {
@@ -259,7 +274,7 @@ ruleset Lutron_manager {
     foreach fetchShadeIDs() setting(shade)
     pre {
       name = "Shade " + shade
-      exists = ent:shadeIDs.any(function(x) { x == shade })
+      exists = ent:shadeIDs >< shade
     }
     if not exists then noop()
     fired {
@@ -283,7 +298,7 @@ ruleset Lutron_manager {
       name = area{"name"}
       id = area{"id"}
       lights = area{"lights"}
-      exists = ent:areas.any(function(x) { x == name })
+      exists = ent:areas >< name
     }
     if (lights != []) && (not exists) then noop()
     fired {
@@ -321,6 +336,20 @@ ruleset Lutron_manager {
     else {
       raise lutron event "error"
         attributes {"message": "Must provide a name for the new lutron group"}
+    }
+  }
+
+  rule delete_lutron_group {
+    select when lutron delete_group
+    pre {
+      name = event:attr("name")
+      id = getChildByName(name){id}
+      exists = ent:groups >< name
+    }
+    if exists then noop()
+    fired {
+      raise wrangler event "child_deletion"
+        attributes {"name": name, "id": id}
     }
   }
 
@@ -374,6 +403,19 @@ ruleset Lutron_manager {
     notfired {
       raise lutron event "error"
         attributes {"message": "Invalid child_group_name or parent_group_name"}
+    }
+  }
+
+  rule handle_child_deletion {
+    select when wrangler child_deleted
+    pre {
+      name = event:attr("name")
+      id = event:attr("id")
+      exists = ent:groups >< name
+    }
+    if exists then noop()
+    fired {
+      ent:group := ent:group.filter(function(x) {x == name})
     }
   }
 
