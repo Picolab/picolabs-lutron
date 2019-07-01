@@ -2,13 +2,13 @@ ruleset Lutron_shade {
   meta {
     use module io.picolabs.wrangler alias wrangler
 
-    shares __testing, status, isConnected
-    provides status
+    shares __testing, status, isConnected, level
+    provides status, level
   }
 
   global {
     __testing = { "queries":
-      [ { "name": "__testing" },
+      [ { "name": "level" },
         { "name": "status" },
         { "name": "isConnected"}
       ],  "events": [
@@ -17,10 +17,15 @@ ruleset Lutron_shade {
       ]
     }
 
-    status = function() {
+    level = function() {
+      regex = "~SHADEGRP," + ent:IntegrationID + ",1,";
       command = "?SHADEGRP," + ent:IntegrationID + ",1";
       response = telnet:query(command);
-      percentage = response.extract(re#(\d+)[.]#)[0];
+      response.extract(<<#{regex}(\d+[.]\d+)>>)[0].as("Number")
+    }
+
+    status = function() {
+      percentage = level();
       status = (percentage == "0") => "closed" | percentage + "% open";
       "Shade "+ ent:IntegrationID + " is " + status
     }
