@@ -2,12 +2,13 @@ ruleset Lutron_light {
   meta {
     use module io.picolabs.wrangler alias wrangler
 
-    shares __testing, status, isConnected
-    provides __testing, status
+    shares __testing, status, isConnected, brightness
+    provides __testing, status, brightness
   }
   global {
     __testing = { "queries":
-      [ { "name": "status" },
+      [ { "name": "brightness" },
+        { "name": "status" },
         { "name": "isConnected" }
       ],  "events":
       [ { "domain": "lutron", "type": "lights_on", "attrs": [  ] },
@@ -19,9 +20,10 @@ ruleset Lutron_light {
     }
 
     brightness = function() {
+      regex = "~OUTPUT," + ent:IntegrationID + ",1,";
       command = "?OUTPUT," + ent:IntegrationID + ",1";
       response = telnet:query(command);
-      response.extract(re#(\d+)[.]#)[0];
+      response.extract(<<#{regex}(\d+[.]\d+)>>)[0].as("Number")
     }
 
     status = function() {
