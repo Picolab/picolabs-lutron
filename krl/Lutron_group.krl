@@ -17,7 +17,9 @@ ruleset Lutron_group {
         { "domain": "lutron", "type": "group_lights_flash", "attrs": [ "fade_time", "delay" ] },
         { "domain": "lutron", "type": "group_lights_stop_flash" },
         { "domain": "lutron", "type": "group_shades_open", "attrs": [ "percentage" ] },
-        { "domain": "lutron", "type": "group_shades_close" }
+        { "domain": "lutron", "type": "group_shades_close" },
+        { "domain": "lutron", "type": "add_device", "attrs": [ "name", "type" ] },
+        { "domain": "lutron", "type": "add_lights", "attrs": [ "lights" ] }
       ]
     }
 
@@ -26,12 +28,28 @@ ruleset Lutron_group {
     }
 
     devicesAndDetails = function() {
-      subscription:established().map(function(x) {
+      subscribers = subscription:established().map(function(x) {
         name = wrangler:skyQuery(x{"Tx"}, "io.picolabs.visual_params", "dname");
-        {}.put(name, {"name": name, "type": x{"Tx_role"}.lc(), "eci": x{"Tx"}})
+        type = x{"Tx_role"}.lc();
+        eci = x{"Tx"};
+        {}.put(name, {"name": name, "type": type, "eci": eci})
       }).reduce(function(a,b) {
         a.put(b)
-      })
+      });
+
+      lights = subscribers.filter(function(v,k) {
+        v{"type"} == "light"
+      });
+
+      shades = subscribers.filter(function(v,k) {
+        v{"type"} == "shade"
+      });
+
+      groups = subscribers.filter(function(v,k) {
+        v{"type"} == "group"
+      });
+
+      {"lights": lights, "shades": shades, "groups": groups }
     }
   }
 
@@ -56,7 +74,7 @@ ruleset Lutron_group {
     pre {
       Tx = subscription{"Tx"}
       subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "lightsOn"
+      type = (subscriber == "light") => "lights_on"
             | (subscriber == "group") => "group_lights_on"
             | "notLight"
     }
@@ -212,5 +230,34 @@ ruleset Lutron_group {
         attributes {"message": "Command Not Sent: Not Logged In"}
           if not isConnected()
     }
+  }
+
+  rule add_device {
+    select when lutron add_device
+    pre {
+      name = event:attr("name")
+      id = event:attr("id")
+      type = event:attr("type")
+    }
+    event:send(
+      {
+        "eci": wrangler:parent_eci(), "eid": "add_device_to_group",
+        "domain": "lutron", "type": "add_device_to_group",
+        "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": type}
+      })
+  }
+
+  rule add_lights {
+    select when lutron add_lights
+    foreach (event:attr("lights").split(re#,#)) setting(light)
+    pre {
+      name = light
+    }
+    event:send(
+      {
+        "eci": wrangler:parent_eci(), "eid": "add_lights_to_group",
+        "domain": "lutron", "type": "add_device_to_group",
+        "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": "light" }
+      })
   }
 }
