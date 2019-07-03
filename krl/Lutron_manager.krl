@@ -3,13 +3,12 @@ ruleset Lutron_manager {
     use module io.picolabs.wrangler alias wrangler
 
     shares __testing, data, extractData, fetchXML, fetchLightIDs, fetchShadeIDs,
-            fetchAreas, isConnected, lightIDs, shadeIDs, areas, getChildByName, allIDs, devicesAndDetails
-    provides data, isConnected, lightIDs, shadeIDs, areas, allIDs, devicesAndDetails
+            fetchAreas, isConnected, lightIDs, shadeIDs, areas, getDeviceByName, devicesAndDetails, removeDevice
+    provides data, isConnected, lightIDs, shadeIDs, areas, integrationIDs, devicesAndDetails
   }
   global {
     __testing = { "queries":
-      [ { "name": "allIDs" },
-        { "name": "data" },
+      [ { "name": "data" },
         // { "name": "extractData" },
         { "name": "isConnected" },
         // { "name": "fetchXML" },
@@ -19,8 +18,9 @@ ruleset Lutron_manager {
         { "name": "lightIDs" },
         { "name": "shadeIDs" },
         { "name": "areas" },
-        // { "name": "getChildByName", "args": [ "name" ] },
-        { "name": "devicesAndDetails" }
+        { "name": "getDeviceByName", "args": [ "name" ] },
+        { "name": "devicesAndDetails" },
+        { "name": "removeDevice", "args": [ "id" ] }
       ],  "events": [ { "domain": "lutron", "type": "login",
                     "attrs": [ "host", "username", "password" ] },
         { "domain": "lutron", "type": "logout" },
@@ -36,15 +36,7 @@ ruleset Lutron_manager {
                     "attrs": [ "child_group_name", "parent_group_name" ] }
       ]
     }
-    allIDs = function() {
-      areas = areas();
-      lights = lightIDs();
-      shades = shadeIDs();
-
-      { "areas": areas, "lights": lights, "shades": shades }
-    }
     data = function() {
-      // area data since last login
       ent:data
     }
     extractData = function() {
@@ -92,56 +84,28 @@ ruleset Lutron_manager {
     shadeIDs = function() {
       ent:shadeIDs.defaultsTo([])
     }
-    getChildByName = function(name) {
-      wrangler:children().filter(function(x) {
-        x{"name"} == name
-      })[0]
+    getDeviceByName = function(name) {
+      ent:devices.map(function(v,k) {
+        v.filter(function(v,k) {
+          v{"name"} == name
+        })
+      }).values().reduce(function(a,b) {
+        a.put(b)
+      }).values()[0]
     }
     arraysAreEqual = function(a,b) {
       a.length() != b.length() => false |
       [a, b].pairwise(function(x, y) {x == y}).all(function(x) {x == true})
     }
     devicesAndDetails = function() {
-      // lists areas, lights, shades, and groups with their appropriate eci's and display names
-      areas = areas().map(function(x) {
-        child = getChildByName(x);
-        eci = child{"eci"};
-        {}.put(x, {"id": x, "type": "area", "eci": eci})
-      }).reduce(function(a,b) {
-        a.put(b)
-      });
-
-      lights = lightIDs().map(function(x) {
-        child = getChildByName("Light " + x);
-        eci = child{"eci"};
-        name = wrangler:skyQuery(eci, "io.picolabs.visual_params", "dname");
-        {}.put(x, {"id": x, "type": "light", "name": name, "brightness": brightness, "eci": eci})
-      }).reduce(function(a,b) {
-        a.put(b)
-      });
-
-      shades = shadeIDs().map(function(x) {
-        child = getChildByName("Shade " + x);
-        eci = child{"eci"};
-        name = wrangler:skyQuery(eci, "io.picolabs.visual_params", "dname");
-        {}.put(x, {"id": x, "type": "shade", "name": name, "eci": eci})
-      }).reduce(function(a,b) {
-        a.put(b)
-      });
-
-      groups = ent:groups.defaultsTo([]).map(function(x) {
-        child = getChildByName(x);
-        eci = child{"eci"};
-        name = x;
-        {}.put(x, {"id": x, "type": "group", "name": name, "eci": eci})
-      }).reduce(function(a,b) {
-        a.put(b)
-      });
-
-      { "areas": areas, "lights": lights, "shades": shades, "groups": groups }.reduce(function(a,b) {
-        a.put(b)
-      },[])
-
+      ent:devices
+    }
+    removeDevice = function(id) {
+      ent:devices.map(function(v,k) {
+        v.filter(function(v,k) {
+          k != id
+        })
+      })
     }
     app = {"name":"Lutron Manager","version":"0.0"/* img: , pre: , ..*/};
     // image url: https://serenaprouat.lutron.com/media/wysiwyg/img_logo_lutron.gif
@@ -165,10 +129,24 @@ ruleset Lutron_manager {
       });
   }
 
+  rule initialized {
+    select when wrangler ruleset_installed
+    fired {
+
+    }
+  }
+
   rule lutron_online {
     select when system online
-    always {
-      ent:isConnected := false
+    fired {
+      ent:isConnected := false;
+      ent:devices{"areas"} := ent:devices{"areas"}.defaultsTo({}); // move these to ruleset_installed when in production
+      ent:devices{"groups"} := ent:devices{"groups"}.defaultsTo({});
+      ent:devices{"lights"} := ent:devices{"lights"}.defaultsTo({});
+      ent:devices{"shades"} := ent:devices{"shades"}.defaultsTo({});
+      ent:lightIDs := ent:lightIDs.defaultsTo([]);
+      ent:shadeIDs := ent:shadeIDs.defaultsTo([]);
+      ent:areas := ent:areas.defaultsTo([]);
     }
   }
 
@@ -259,13 +237,14 @@ ruleset Lutron_manager {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
+          "type": "light",
           "color": "#eeee00",
           "IntegrationID": light,
           "rids": [
             "Lutron_light"
             ]
         };
-      ent:lightIDs := ent:lightIDs.defaultsTo([]).append(light)
+      ent:lightIDs := ent:lightIDs.append(light)
     }
   }
 
@@ -281,13 +260,14 @@ ruleset Lutron_manager {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
+          "type": "shade",
           "color": "#8e8e8e",
           "IntegrationID": shade,
           "rids": [
             "Lutron_shade"
             ]
         };
-      ent:shadeIDs := ent:shadeIDs.defaultsTo([]).append(shade)
+      ent:shadeIDs := ent:shadeIDs.append(shade)
     }
   }
 
@@ -305,6 +285,7 @@ ruleset Lutron_manager {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
+          "type": "area",
           "IntegrationID": id,
           "light_ids": lights,
           "color": "#EB4839",
@@ -312,7 +293,7 @@ ruleset Lutron_manager {
             "Lutron_area"
             ]
         };
-      ent:areas := ent:areas.defaultsTo([]).append(name)
+      ent:areas := ent:areas.append(name)
     }
   }
 
@@ -326,12 +307,12 @@ ruleset Lutron_manager {
       raise wrangler event "child_creation"
         attributes {
           "name": name,
+          "type": "group",
           "color": "#3CAD5E",
           "rids": [
             "Lutron_group"
             ]
         };
-      ent:groups := ent:groups.defaultsTo([]).append(name)
     }
     else {
       raise lutron event "error"
@@ -339,14 +320,52 @@ ruleset Lutron_manager {
     }
   }
 
+  rule on_child_initialized {
+    select when wrangler child_initialized
+    pre {
+      attrs = event:attrs.klog("attrs")
+      picoID = event:attr("id")
+      name = event:attr("name")
+      type = event:attr("rs_attrs"){"type"}
+      eci = event:attr("eci")
+      grouping = type + "s"
+    }
+    fired {
+      ent:devices{[grouping, picoID]} := {"id": picoID, "name": name, "type": type, "eci": eci}
+    }
+  }
+
+  rule on_child_name_changed {
+    select when lutron child_name_changed
+    pre {
+      id = event:attr("child_id")
+      category = event:attr("child_type") + "s"
+      name = event:attr("new_name")
+      updated_devices = ent:devices.put([category, id, "name"], name)
+    }
+    fired {
+      ent:devices := updated_devices
+    }
+  }
+
+  rule on_child_deletion {
+    select when wrangler delete_child
+    pre {
+      picoID = event:attr("id")
+      updated_devices = removeDevice(picoID)
+    }
+    fired {
+      ent:devices := updated_devices
+    }
+  }
+
   rule delete_lutron_group {
     select when lutron delete_group
     pre {
       name = event:attr("name")
-      id = getChildByName(name){id}
-      exists = ent:groups >< name
+      id = getDeviceByName(name){"id"}
     }
-    if exists then noop()
+    if id then noop()
     fired {
       raise wrangler event "child_deletion"
         attributes {"name": name, "id": id}
@@ -356,9 +375,10 @@ ruleset Lutron_manager {
   rule add_device_to_group {
     select when lutron add_device_to_group
     pre {
-      device_eci = getChildByName(event:attr("device_name")){"eci"}.klog("device_eci")
-      group_eci = getChildByName(event:attr("group_name")){"eci"}.klog("group_eci")
-      device_type = event:attr("device_name").substr(0,5)
+      device = getDeviceByName(event:attr("device_name"))
+      device_eci = device{"eci"}
+      device_type = device{"type"}
+      group_eci = getDeviceByName(event:attr("group_name")){"eci"}
     }
     if (device_eci && group_eci) then
     event:send(
@@ -383,8 +403,8 @@ ruleset Lutron_manager {
   rule add_group_to_group {
     select when lutron add_group_to_group
     pre {
-      child_group_eci = getChildByName(event:attr("child_group_name")){"eci"}.klog("child_eci")
-      parent_group_eci = getChildByName(event:attr("parent_group_name")){"eci"}.klog("parent_eci")
+      child_group_eci = getDeviceByName(event:attr("child_group_name")){"eci"}.klog("child_eci")
+      parent_group_eci = getDeviceByName(event:attr("parent_group_name")){"eci"}.klog("parent_eci")
     }
     if (child_group_eci && parent_group_eci) then
     event:send(
@@ -403,19 +423,6 @@ ruleset Lutron_manager {
     notfired {
       raise lutron event "error"
         attributes {"message": "Invalid child_group_name or parent_group_name"}
-    }
-  }
-
-  rule handle_child_deletion {
-    select when wrangler delete_child
-    pre {
-      name = event:attr("name")
-      id = event:attr("id")
-      exists = ent:groups >< name
-    }
-    if exists then noop()
-    fired {
-      ent:groups := ent:groups.filter(function(x) {x != name})
     }
   }
 
