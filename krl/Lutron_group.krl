@@ -20,7 +20,7 @@ ruleset Lutron_group {
         { "domain": "lutron", "type": "group_lights_stop_flash" },
         { "domain": "lutron", "type": "group_shades_open", "attrs": [ "percentage" ] },
         { "domain": "lutron", "type": "group_shades_close" },
-        { "domain": "lutron", "type": "add_device", "attrs": [ "name", "type" ] },
+        { "domain": "lutron", "type": "add_device", "attrs": [ "name" ] },
         { "domain": "lutron", "type": "remove_device", "attrs": [ "name" ] }
       ]
     }
@@ -32,9 +32,10 @@ ruleset Lutron_group {
     devicesAndDetails = function() {
       subscribers = subscription:established().map(function(x) {
         name = wrangler:skyQuery(x{"Tx"}, "io.picolabs.visual_params", "dname");
+        id = wrangler:skyQuery(x{"Tx"}, "io.picolabs.wrangler", "myself"){"id"};
         type = x{"Tx_role"}.lc();
         eci = x{"Tx"};
-        {}.put(name, {"name": name, "type": type, "eci": eci})
+        {}.put(name, {"id": id, "name": name, "type": type, "eci": eci})
       }).reduce(function(a,b) {
         a.put(b)
       });
@@ -86,6 +87,21 @@ ruleset Lutron_group {
         attributes attrs;
       log info "auto accepted subscription."
     }
+  }
+
+  rule on_visual_update {
+    select when visual update
+    pre {
+      dname = event:attr("dname")
+      id = wrangler:myself(){"id"}
+    }
+    if dname then
+    event:send(
+      {
+        "eci": wrangler:parent_eci(), "eid": "child_name_changed",
+        "domain": "lutron", "type": "child_name_changed",
+        "attrs": {"child_id": id, "child_type": "group", "new_name": dname}
+      })
   }
 
   rule group_lights_on {
@@ -256,43 +272,24 @@ ruleset Lutron_group {
     select when lutron add_device
     pre {
       name = event:attr("name")
-      id = event:attr("id")
-      type = event:attr("type") || getDeviceByName(name){"type"}
     }
     event:send(
       {
         "eci": wrangler:parent_eci(), "eid": "add_device_to_group",
         "domain": "lutron", "type": "add_device_to_group",
-        "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": type}
+        "attrs": {"device_name": name, "group_name": wrangler:name()}
       })
   }
 
-  rule add_lights {
-    select when lutron add_lights
-    foreach (event:attr("lights").split(re#,#)) setting(light)
+  rule add_devices {
+    select when lutron add_devices
+    foreach (event:attr("devices").split(re#,#)) setting(device)
     pre {
-      name = light
+      name = device
     }
-    event:send(
-      {
-        "eci": wrangler:parent_eci(), "eid": "add_lights_to_group",
-        "domain": "lutron", "type": "add_device_to_group",
-        "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": "light" }
-      })
-  }
-
-  rule add_shades {
-    select when lutron add_shades
-    foreach (event:attr("shades").split(re#,#)) setting(shade)
-    pre {
-      name = shade
+    fired {
+      raise lutron event "add_device" attributes {"name": name}
     }
-    event:send(
-      {
-        "eci": wrangler:parent_eci(), "eid": "add_shades_to_group",
-        "domain": "lutron", "type": "add_device_to_group",
-        "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": "shade" }
-      })
   }
 
   rule remove_device {
@@ -310,25 +307,13 @@ ruleset Lutron_group {
     }
   }
 
-  rule remove_lights {
-    select when lutron remove_lights
-    foreach (event:attr("lights").split(re#,#)) setting(light)
+  rule remove_devices {
+    select when lutron remove_devices
+    foreach (event:attr("devices").split(re#,#)) setting(device)
     pre {
-      name = light
+      name = device
     }
-    always {
-      raise lutron event "remove_device"
-        attributes { "name": name }
-    }
-  }
-
-  rule remove_shades {
-    select when lutron remove_shades
-    foreach (event:attr("shades").split(re#,#)) setting(shade)
-    pre {
-      name = shade
-    }
-    always {
+    fired {
       raise lutron event "remove_device"
         attributes { "name": name }
     }

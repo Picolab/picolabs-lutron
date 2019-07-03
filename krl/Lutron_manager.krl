@@ -31,9 +31,7 @@ ruleset Lutron_manager {
         { "domain": "lutron", "type": "create_default_areas" },
         { "domain": "lutron", "type": "create_group", "attrs": [ "name" ] },
         { "domain": "lutron", "type": "add_device_to_group",
-                    "attrs": [ "device_name", "device_type", "group_name" ] },
-        { "domain": "lutron", "type": "add_group_to_group",
-                    "attrs": [ "child_group_name", "parent_group_name" ] }
+                    "attrs": [ "device_name", "device_type", "group_name" ] }
       ]
     }
     data = function() {
@@ -397,32 +395,6 @@ ruleset Lutron_manager {
     notfired {
       raise lutron event "error"
         attributes {"message": "Invalid device_name or group_name"}
-    }
-  }
-
-  rule add_group_to_group {
-    select when lutron add_group_to_group
-    pre {
-      child_group_eci = getDeviceByName(event:attr("child_group_name")){"eci"}.klog("child_eci")
-      parent_group_eci = getDeviceByName(event:attr("parent_group_name")){"eci"}.klog("parent_eci")
-    }
-    if (child_group_eci && parent_group_eci) then
-    event:send(
-      {
-        "eci": parent_group_eci, "eid": "subscription",
-        "domain": "wrangler", "type": "subscription",
-        "attrs": {
-          "name": event:attr("child_group_name"),
-          "Rx_role": "controller",
-          "Tx_role": "group",
-          "channel_type": "subscription",
-          "wellKnown_Tx": child_group_eci
-        }
-      })
-
-    notfired {
-      raise lutron event "error"
-        attributes {"message": "Invalid child_group_name or parent_group_name"}
     }
   }
 
