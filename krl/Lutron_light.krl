@@ -63,6 +63,21 @@ ruleset Lutron_light {
     }
   }
 
+  rule on_visual_update {
+    select when visual update
+    pre {
+      dname = event:attr("dname")
+      id = wrangler:myself(){"id"}
+    }
+    if dname then
+    event:send(
+      {
+        "eci": wrangler:parent_eci(), "eid": "child_name_changed",
+        "domain": "lutron", "type": "child_name_changed",
+        "attrs": {"child_id": id, "child_type": "light", "new_name": dname}
+      })
+  }
+
   rule lights_on {
     select when lutron lights_on
     pre {
