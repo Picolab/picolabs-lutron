@@ -31,7 +31,7 @@ ruleset Lutron_manager {
         { "domain": "lutron", "type": "create_default_areas" },
         { "domain": "lutron", "type": "create_group", "attrs": [ "name" ] },
         { "domain": "lutron", "type": "add_device_to_group",
-                    "attrs": [ "device_name", "group_name" ] },
+                    "attrs": [ "device_name", "device_type", "group_name" ] },
         { "domain": "lutron", "type": "add_group_to_group",
                     "attrs": [ "child_group_name", "parent_group_name" ] }
       ]
@@ -185,7 +185,7 @@ ruleset Lutron_manager {
                 "password": event:attr("password"),
                 "failedLoginMatch": "bad login",
                 "initialLFCR": true,
-                "timeout": 1500000 }
+                "timeout": 1800000 } // 30 minutes
     }
     every {
       telnet:connect(params) setting(response)
@@ -407,7 +407,7 @@ ruleset Lutron_manager {
   }
 
   rule handle_child_deletion {
-    select when wrangler child_deleted
+    select when wrangler delete_child
     pre {
       name = event:attr("name")
       id = event:attr("id")
@@ -415,7 +415,7 @@ ruleset Lutron_manager {
     }
     if exists then noop()
     fired {
-      ent:group := ent:group.filter(function(x) {x == name})
+      ent:groups := ent:groups.filter(function(x) {x != name})
     }
   }
 
