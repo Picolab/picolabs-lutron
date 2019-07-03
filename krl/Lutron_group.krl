@@ -2,14 +2,16 @@ ruleset Lutron_group {
   meta {
     use module io.picolabs.subscription alias subscription
     use module io.picolabs.wrangler alias wrangler
-    shares __testing, isConnected, devicesAndDetails
+    shares __testing, isConnected, devicesAndDetails, getDeviceByName, getSubscriptionByTx
     provides devicesAndDetails
   }
   global {
     __testing = { "queries":
       [ { "name": "__testing" },
         { "name": "isConnected" },
-        { "name": "devicesAndDetails" }
+        { "name": "devicesAndDetails" },
+        { "name": "getDeviceByName", "args": [ "name" ] },
+        { "name": "getSubscriptionByTx", "args": [ "Tx" ] }
       ] , "events":
       [ { "domain": "lutron", "type": "group_lights_on" },
         { "domain": "lutron", "type": "group_lights_off" },
@@ -19,7 +21,7 @@ ruleset Lutron_group {
         { "domain": "lutron", "type": "group_shades_open", "attrs": [ "percentage" ] },
         { "domain": "lutron", "type": "group_shades_close" },
         { "domain": "lutron", "type": "add_device", "attrs": [ "name", "type" ] },
-        { "domain": "lutron", "type": "add_lights", "attrs": [ "lights" ] }
+        { "domain": "lutron", "type": "remove_device", "attrs": [ "name" ] }
       ]
     }
 
@@ -50,6 +52,24 @@ ruleset Lutron_group {
       });
 
       {"lights": lights, "shades": shades, "groups": groups }
+    }
+
+    getSubscriptionByTx = function(Tx) {
+      subscription:established().filter(function(x) {
+        x{"Tx"} == Tx
+      }).reduce(function(a,b) {
+        a.put(b)
+      })
+    }
+
+    getDeviceByName = function(name) {
+      devicesAndDetails().values().reduce(function(a,b) {
+        a.put(b)
+      }).filter(function(v,k) {
+        v{"name"} == name
+      }).values().reduce(function(a,b) {
+        a.put(b)
+      })
     }
   }
 
@@ -237,7 +257,7 @@ ruleset Lutron_group {
     pre {
       name = event:attr("name")
       id = event:attr("id")
-      type = event:attr("type")
+      type = event:attr("type") || getDeviceByName(name){"type"}
     }
     event:send(
       {
@@ -259,5 +279,58 @@ ruleset Lutron_group {
         "domain": "lutron", "type": "add_device_to_group",
         "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": "light" }
       })
+  }
+
+  rule add_shades {
+    select when lutron add_shades
+    foreach (event:attr("shades").split(re#,#)) setting(shade)
+    pre {
+      name = shade
+    }
+    event:send(
+      {
+        "eci": wrangler:parent_eci(), "eid": "add_shades_to_group",
+        "domain": "lutron", "type": "add_device_to_group",
+        "attrs": {"device_name": name, "group_name": wrangler:name(), "device_type": "shade" }
+      })
+  }
+
+  rule remove_device {
+    select when lutron remove_device
+    pre {
+      name = event:attr("name")
+      device = getDeviceByName(name).klog("device")
+      subscription = getSubscriptionByTx(device{"eci"}).klog("subscription")
+      id = subscription{"Id"}
+    }
+    if (id) then noop()
+    fired {
+      raise wrangler event "subscription_cancellation"
+        attributes { "Id": id }
+    }
+  }
+
+  rule remove_lights {
+    select when lutron remove_lights
+    foreach (event:attr("lights").split(re#,#)) setting(light)
+    pre {
+      name = light
+    }
+    always {
+      raise lutron event "remove_device"
+        attributes { "name": name }
+    }
+  }
+
+  rule remove_shades {
+    select when lutron remove_shades
+    foreach (event:attr("shades").split(re#,#)) setting(shade)
+    pre {
+      name = shade
+    }
+    always {
+      raise lutron event "remove_device"
+        attributes { "name": name }
+    }
   }
 }
