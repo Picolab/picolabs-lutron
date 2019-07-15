@@ -2,12 +2,12 @@ ruleset Lutron_group {
   meta {
     use module io.picolabs.subscription alias subscription
     use module io.picolabs.wrangler alias wrangler
-    shares __testing, isConnected, devicesAndDetails, getDeviceByName, getSubscriptionByTx
+    shares __testing, isConnected, devicesAndDetails, getDeviceByName, getSubscriptionByTx, subscribers
     provides devicesAndDetails
   }
   global {
     __testing = { "queries":
-      [ { "name": "__testing" },
+      [ { "name": "subscribers" },
         { "name": "isConnected" },
         { "name": "devicesAndDetails" },
         { "name": "getDeviceByName", "args": [ "name" ] },
@@ -23,6 +23,17 @@ ruleset Lutron_group {
         { "domain": "lutron", "type": "add_device", "attrs": [ "name" ] },
         { "domain": "lutron", "type": "remove_device", "attrs": [ "name" ] }
       ]
+    }
+    subscribers = function() {
+      subscription:established().map(function(x) {
+        name = wrangler:skyQuery(x{"Tx"}, "io.picolabs.visual_params", "dname");
+        id = wrangler:skyQuery(x{"Tx"}, "io.picolabs.wrangler", "myself"){"id"};
+        type = x{"Tx_role"}.lc();
+        eci = x{"Tx"};
+        {}.put(name, {"id": id, "name": name, "type": type, "eci": eci})
+      }).reduce(function(a,b) {
+        a.put(b)
+      });
     }
 
     isConnected = function() {
@@ -106,18 +117,18 @@ ruleset Lutron_group {
 
   rule group_lights_on {
     select when lutron group_lights_on
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "lights_on"
-            | (subscriber == "group") => "group_lights_on"
+      eci = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "light") => "lights_on"
+            | (role == "group") => "group_lights_on"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_lights_on",
+        "eci": eci, "eid": "group_lights_on",
         "domain": "lutron", "type": type
       })
     notfired {
@@ -129,18 +140,18 @@ ruleset Lutron_group {
 
   rule group_lights_off {
     select when lutron group_lights_off
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "lights_off"
-            | (subscriber == "group") => "group_lights_off"
+      eci = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "light") => "lights_off"
+            | (role == "group") => "group_lights_off"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_lights_off",
+        "eci": eci, "eid": "group_lights_off",
         "domain": "lutron", "type": type
       })
     notfired {
@@ -152,18 +163,18 @@ ruleset Lutron_group {
 
   rule group_lights_brightness {
     select when lutron group_lights_brightness
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "set_brightness"
-            | (subscriber == "group") => "group_lights_brightness"
+      eci = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "light") => "set_brightness"
+            | (role == "group") => "group_lights_brightness"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_lights_brightness",
+        "eci": eci, "eid": "group_lights_brightness",
         "domain": "lutron", "type": type,
         "attrs": event:attrs
       })
@@ -176,18 +187,18 @@ ruleset Lutron_group {
 
   rule group_lights_flash {
     select when lutron group_lights_flash
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "flash"
-            | (subscriber == "group") => "group_lights_flash"
+      eci = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "light") => "flash"
+            | (role == "group") => "group_lights_flash"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_lights_flash",
+        "eci": eci, "eid": "group_lights_flash",
         "domain": "lutron", "type": type,
         "attrs": event:attrs
       })
@@ -200,18 +211,18 @@ ruleset Lutron_group {
 
   rule group_lights_stop_flash {
     select when lutron group_lights_stop_flash
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "light") => "stop_flash"
-            | (subscriber == "group") => "group_lights_stop_flash"
+      eci = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "light") => "stop_flash"
+            | (role == "group") => "group_lights_stop_flash"
             | "notLight"
     }
     if (type != "notLight" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_lights_stop_flash",
+        "eci": eci, "eid": "group_lights_stop_flash",
         "domain": "lutron", "type": type
       })
     notfired {
@@ -223,18 +234,18 @@ ruleset Lutron_group {
 
   rule group_shades_open {
     select when lutron group_shades_open
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "shade") => "shades_open"
-            | (subscriber == "group") => "group_shades_open"
+      eci = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "shade") => "shades_open"
+            | (role == "group") => "group_shades_open"
             | "notShade"
     }
     if (type != "notShade" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_shades_open",
+        "eci": eci, "eid": "group_shades_open",
         "domain": "lutron", "type": type,
         "attrs": event:attrs
       })
@@ -247,18 +258,18 @@ ruleset Lutron_group {
 
   rule group_shades_close {
     select when lutron group_shades_close
-    foreach subscription:established() setting(subscription)
+    foreach subscribers() setting(subscriber)
     pre {
-      Tx = subscription{"Tx"}
-      subscriber = subscription{"Tx_role"}.lc()
-      type = (subscriber == "shade") => "shades_close"
-            | (subscriber == "group") => "group_shades_close"
+      Tx = subscriber{"eci"}
+      role = subscriber{"type"}
+      type = (role == "shade") => "shades_close"
+            | (role == "group") => "group_shades_close"
             | "notShade"
     }
     if (type != "notShade" && isConnected()) then
     event:send(
       {
-        "eci": Tx, "eid": "group_shades_close",
+        "eci": eci, "eid": "group_shades_close",
         "domain": "lutron", "type": type
       })
     notfired {
@@ -272,6 +283,9 @@ ruleset Lutron_group {
     select when lutron add_device
     pre {
       name = event:attr("name")
+      existing_device = getDeviceByName(name)
+      eci = existing_device{"eci"}
+      existing_controller = existing_device{"type"} == "controller"
     }
     event:send(
       {
@@ -279,6 +293,12 @@ ruleset Lutron_group {
         "domain": "lutron", "type": "add_device_to_group",
         "attrs": {"device_name": name, "group_name": wrangler:name()}
       })
+    fired {
+      // to avoid multiple subscriptions to the same group
+      raise wrangler event "subscription_cancellation"
+        attributes { "Id": getSubscriptionByTx(eci){"Id"} }
+        if existing_controller
+    }
   }
 
   rule add_devices {
