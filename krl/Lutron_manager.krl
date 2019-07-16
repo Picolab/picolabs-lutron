@@ -376,7 +376,8 @@ ruleset Lutron_manager {
       device = getDeviceByName(event:attr("device_name"))
       device_eci = device{"eci"}
       device_type = device{"type"}
-      group_eci = getDeviceByName(event:attr("group_name")){"eci"}
+      group = getDeviceByName(event:attr("group_name"))
+      group_eci = group{"eci"}
     }
     if (device_eci && group_eci) then
     event:send(
@@ -391,11 +392,30 @@ ruleset Lutron_manager {
           "wellKnown_Tx": device_eci
         }
       })
-
-    notfired {
-      raise lutron event "error"
-        attributes {"message": "Invalid device_name or group_name"}
+    fired {
+      raise lutron event "group_loop_guard"
+        attributes { "child_eci": device_eci, "parent_eci": group_eci }
+        if device_type == "group"
     }
+    else {
+      raise lutron event "error"
+        attributes {"message": "Unable to add device " + device{"name"} + " to group " + group{"name"} }
+    }
+  }
+
+  rule group_loop_guard {
+    select when lutron group_loop_guard
+    pre {
+      child_eci = event:attr("child_eci")
+      parent_eci = event:attr("parent_eci")
+      unsafe_ecis = wrangler:skyQuery(parent_eci, "Lutron_group", "unsafeGroups")
+    }
+    event:send(
+      {
+        "eci": child_eci, "eid": "group_loop_guard",
+        "domain": "lutron", "type": "track_unsafe_groups",
+        "attrs": { "ecis": unsafe_ecis.append(parent_eci) }
+      })
   }
 
   rule handle_error {

@@ -2,14 +2,17 @@ ruleset Lutron_group {
   meta {
     use module io.picolabs.subscription alias subscription
     use module io.picolabs.wrangler alias wrangler
-    shares __testing, isConnected, devicesAndDetails, getDeviceByName, getSubscriptionByTx, subscribers
+    shares __testing, isConnected, devicesAndDetails, getDeviceByName,
+          getSubscriptionByTx, subscribers, isSafeToAddGroup, unsafeGroups
     provides devicesAndDetails
   }
   global {
     __testing = { "queries":
-      [ { "name": "subscribers" },
-        { "name": "isConnected" },
+      [ { "name": "isConnected" },
+        { "name": "subscribers" },
         { "name": "devicesAndDetails" },
+        { "name": "unsafeGroups" },
+        { "name": "isSafeToAddGroup", "args": [ "name" ] },
         { "name": "getDeviceByName", "args": [ "name" ] },
         { "name": "getSubscriptionByTx", "args": [ "Tx" ] }
       ] , "events":
@@ -24,6 +27,17 @@ ruleset Lutron_group {
         { "domain": "lutron", "type": "remove_device", "attrs": [ "name" ] }
       ]
     }
+
+    unsafeGroups = function() {
+      ent:unsafe_groups.reduce(function(a,b) {
+        a.append(b)
+      })
+    }
+
+    isConnected = function() {
+      wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
+    }
+
     subscribers = function() {
       subscription:established().map(function(x) {
         name = wrangler:skyQuery(x{"Tx"}, "io.picolabs.visual_params", "dname");
@@ -36,8 +50,13 @@ ruleset Lutron_group {
       });
     }
 
-    isConnected = function() {
-      wrangler:skyQuery(wrangler:parent_eci(), "Lutron_manager", "isConnected", null)
+    isSafeToAddGroup = function(name) {
+      unsafeGroups().map(function(x) {
+        name = wrangler:skyQuery(x.klog("eci"), "io.picolabs.visual_params", "dname");
+        [].append(name)
+      }).reduce(function(a,b) {
+        a.append(b)
+      }).none(function(x) { x == name })
     }
 
     devicesAndDetails = function() {
@@ -82,6 +101,13 @@ ruleset Lutron_group {
       }).values().reduce(function(a,b) {
         a.put(b)
       })
+    }
+  }
+
+  rule lutron_online {
+    select when system online
+    fired {
+      ent:unsafe_groups := ent:unsafe_groups.defaultsTo([]);
     }
   }
 
@@ -279,6 +305,17 @@ ruleset Lutron_group {
     }
   }
 
+  rule track_unsafe_groups {
+    select when lutron track_unsafe_groups
+    fired {
+      ent:unsafe_groups := ent:unsafe_groups.append(event:attr("ecis"))
+    }
+  }
+
+  rule filter_unsafe_groups {
+
+  }
+
   rule add_device {
     select when lutron add_device
     pre {
@@ -287,7 +324,7 @@ ruleset Lutron_group {
       eci = existing_device{"eci"}
       existing_controller = existing_device{"type"} == "controller"
     }
-    event:send(
+    if isSafeToAddGroup(name) then event:send(
       {
         "eci": wrangler:parent_eci(), "eid": "add_device_to_group",
         "domain": "lutron", "type": "add_device_to_group",
@@ -298,6 +335,10 @@ ruleset Lutron_group {
       raise wrangler event "subscription_cancellation"
         attributes { "Id": getSubscriptionByTx(eci){"Id"} }
         if existing_controller
+    }
+    else {
+      raise lutron event "warning"
+        attributes {"message": "unsafe to add group " + name + " (infinite loop warning)" }
     }
   }
 
@@ -323,7 +364,9 @@ ruleset Lutron_group {
     if (id) then noop()
     fired {
       raise wrangler event "subscription_cancellation"
-        attributes { "Id": id }
+        attributes { "Id": id };
+      raise lutron event "filter_unsafe_groups"
+        attributes { "ecis": unsafeGroups().append(wrangler:myself(){"eci"}) }
     }
   }
 
