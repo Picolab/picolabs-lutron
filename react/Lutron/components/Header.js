@@ -8,7 +8,7 @@ const Header = (props) => {
     <div className="header">
       <span className="left">
         {!props.backEnabled &&
-          <Button color="secondary"><i className="fa fa-home"/> Home Page</Button>}
+          <Button color="secondary"><i className="fa fa-home"/> Home</Button>}
         {props.backEnabled &&
           <Button color="primary" onClick={props.backAction}>
             <i className="fa fa-arrow-left"/> Back</Button>}
