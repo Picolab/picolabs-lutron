@@ -3,7 +3,7 @@ ruleset Lutron_group {
     use module io.picolabs.subscription alias subscription
     use module io.picolabs.wrangler alias wrangler
     shares __testing, isConnected, devicesAndDetails, getDeviceByName,
-          getSubscriptionByTx, subscribers, isSafeToAddGroup, unsafeGroups
+          getSubscriptionByTx, subscribers, isSafeToAddGroup, unsafeGroups, unsafeGroupNames
     provides devicesAndDetails
   }
   global {
@@ -12,6 +12,7 @@ ruleset Lutron_group {
         { "name": "subscribers" },
         { "name": "devicesAndDetails" },
         { "name": "unsafeGroups" },
+        { "name": "unsafeGroupNames" },
         { "name": "isSafeToAddGroup", "args": [ "name" ] },
         { "name": "getDeviceByName", "args": [ "name" ] },
         { "name": "getSubscriptionByTx", "args": [ "Tx" ] }
@@ -29,9 +30,16 @@ ruleset Lutron_group {
     }
 
     unsafeGroups = function() {
-      ent:unsafe_groups.reduce(function(a,b) {
+      ent:unsafe_groups
+    }
+
+    unsafeGroupNames = function() {
+      unsafeGroups().map(function(x) {
+        name = wrangler:skyQuery(x, "io.picolabs.visual_params", "dname");
+        [].append(name)
+      }).reduce(function(a,b) {
         a.append(b)
-      })
+      },[])
     }
 
     isConnected = function() {
@@ -51,12 +59,7 @@ ruleset Lutron_group {
     }
 
     isSafeToAddGroup = function(name) {
-      unsafeGroups().map(function(x) {
-        name = wrangler:skyQuery(x.klog("eci"), "io.picolabs.visual_params", "dname");
-        [].append(name)
-      }).reduce(function(a,b) {
-        a.append(b)
-      }).none(function(x) { x == name })
+      unsafeGroupNames().none(function(x) { x == name })
     }
 
     devicesAndDetails = function() {
@@ -82,7 +85,7 @@ ruleset Lutron_group {
         v{"type"} == "group"
       });
 
-      {"lights": lights, "shades": shades, "groups": groups }
+      {"lights": lights, "shades": shades, "groups": groups, "unsafeGroups": unsafeGroupNames() }
     }
 
     getSubscriptionByTx = function(Tx) {
@@ -94,9 +97,7 @@ ruleset Lutron_group {
     }
 
     getDeviceByName = function(name) {
-      devicesAndDetails().values().reduce(function(a,b) {
-        a.put(b)
-      }).filter(function(v,k) {
+      subscribers().filter(function(v,k) {
         v{"name"} == name
       }).values().reduce(function(a,b) {
         a.put(b)
@@ -309,11 +310,29 @@ ruleset Lutron_group {
     select when lutron track_unsafe_groups
     fired {
       ent:unsafe_groups := ent:unsafe_groups.append(event:attr("ecis"))
+        .reduce(function(a,b) {
+          a.append(b)
+        })
     }
   }
 
   rule filter_unsafe_groups {
-
+    select when lutron filter_unsafe_groups
+    foreach subscribers() setting(subscriber)
+    pre {
+      isGroup = subscriber{"type"} == "group"
+    }
+    if isGroup then event:send(
+      {
+        "eci": subscriber{"eci"}, "eid": "filter_unsafe_groups",
+        "domain": "lutron", "type": "filter_unsafe_groups",
+        "attrs": { "ecis": event:attr("ecis") }
+      })
+    always {
+      ent:unsafe_groups := unsafeGroups().filter(function(x) {
+        not (event:attr("ecis") >< x)
+      }) on final
+    }
   }
 
   rule add_device {
@@ -338,7 +357,7 @@ ruleset Lutron_group {
     }
     else {
       raise lutron event "warning"
-        attributes {"message": "unsafe to add group " + name + " (infinite loop warning)" }
+        attributes { "message": "unsafe to add group " + name + " (infinite loop warning)" }
     }
   }
 
@@ -361,12 +380,15 @@ ruleset Lutron_group {
       subscription = getSubscriptionByTx(device{"eci"}).klog("subscription")
       id = subscription{"Id"}
     }
-    if (id) then noop()
+    if (id) then event:send(
+      {
+        "eci": device{"eci"}, "eid": "filter_unsafe_groups",
+        "domain": "lutron", "type": "filter_unsafe_groups",
+        "attrs": { "ecis": unsafeGroups().append(wrangler:myself(){"eci"}) }
+      })
     fired {
       raise wrangler event "subscription_cancellation"
-        attributes { "Id": id };
-      raise lutron event "filter_unsafe_groups"
-        attributes { "ecis": unsafeGroups().append(wrangler:myself(){"eci"}) }
+        attributes { "Id": id }
     }
   }
 
