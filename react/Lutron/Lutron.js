@@ -1,8 +1,6 @@
 import React from 'react';
 import LoginPage from './pages/LoginPage';
-import HomePage from './pages/HomePage';
-import { Media } from 'reactstrap';
-import spinner from './media/circle-loading.gif';
+import PageRouter from './pages/PageRouter';
 class Lutron extends React.Component {
   constructor(props) {
     super(props);
@@ -10,6 +8,7 @@ class Lutron extends React.Component {
     this.state = {
       isConnected: false,
       failedAttempt: props.failedAttempt,
+      failedMessage: "",
       loading: false,
       areas: {},
       lights: {},
@@ -24,7 +23,6 @@ class Lutron extends React.Component {
   }
 
   componentDidMount() {
-    console.log("main props", this.props);
     this.mounted = true;
     let promise = this.props.manifoldQuery({
       rid: "Lutron_manager",
@@ -53,9 +51,25 @@ class Lutron extends React.Component {
 
     promise.then((resp) => {
       this.fetchData();
+      let message = resp.data.directives[0].options.result
       let isSuccessful = resp.data.directives[0].options.isConnected;
       if (this.mounted) {
-        this.setState({ isConnected: isSuccessful, loading: false, failedAttempt: !isSuccessful})
+        if (message.substring(0,6) === "Unable") {
+          this.setState({
+            isConnected: isSuccessful,
+            loading: false,
+            failedAttempt: !isSuccessful,
+            failedMessage: message
+          })
+        }
+        else {
+          this.setState({
+            isConnected: isSuccessful,
+            loading: false,
+            failedAttempt: !isSuccessful,
+            failedMessage: "Invalid Username or Password"
+          })
+        }
       }
     });
   }
@@ -86,7 +100,6 @@ class Lutron extends React.Component {
   }
 
   sync() {
-    console.log("syncing from parent");
     this.setState({ loading: true })
     let syncPromise = this.props.signalEvent({
       domain: "lutron",
@@ -100,17 +113,19 @@ class Lutron extends React.Component {
   }
 
   render() {
-    const { areas, lights, shades, groups, isConnected, loading, failedAttempt } = this.state;
+    const { areas, lights, shades, groups, isConnected, loading, failedAttempt,
+            failedMessage } = this.state;
     return (
       <div>
         {!isConnected &&
           <LoginPage
             login={this.login}
             failedAttempt={failedAttempt}
+            failedMessage={failedMessage}
             loading={loading}
           />}
         {isConnected &&
-          <HomePage
+          <PageRouter
             areas={areas}
             lights={lights}
             shades={shades}

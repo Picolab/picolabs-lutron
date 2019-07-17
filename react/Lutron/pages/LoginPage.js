@@ -37,7 +37,7 @@ class LoginPage extends React.Component {
   renderError(failedAttempt) {
     if (failedAttempt) {
       return (
-        <div className="text-danger">Unable to Login! Please try again!</div>
+        <div className="text-danger">{this.props.failedMessage}</div>
       );
     }
     return null;
@@ -67,7 +67,7 @@ class LoginPage extends React.Component {
           onClick={this.login()}
           color="primary"
           disabled={!this.enabled()} >
-          { loading && <div className="loader tiny left" />}
+          { loading && <div className="loader-button"/>}
           Login
         </Button>
       </Form>
