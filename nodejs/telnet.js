@@ -3,6 +3,7 @@ var DOMParser = require('xmldom').DOMParser
 var mkKRLfn = require('../mkKRLfn')
 var mkKRLaction = require('../mkKRLaction')
 var Telnet = require('telnet-client')
+var ping = require('ping')
 
 var connection = new Telnet()
 // default parameters
@@ -16,19 +17,21 @@ var parameters = {
   "password": 'guest',
   "failedLoginMatch": "bad login",
   "initialLFCR": true,
-  "timeout": 150000
+  "timeout": 1800000 // 30 minutes
 }
 
 var getHost = function() {
   return parameters.host
 }
 
+var isValidHost = async function() {
+  let response = await ping.promise.probe(parameters.host);
+  console.log("isValidHost", response);
+  return response.alive;
+}
+
 connection.on('ready', function (prompt) {
   console.log('ready!')
-})
-
-connection.on('failedlogin', function (msg) {
-  console.log('failedlogin event!', msg)
 })
 
 connection.on('writedone', function (prompt) {
@@ -39,9 +42,21 @@ connection.on('connect', function (prompt) {
   console.log('telnet connection established!')
 })
 
+connection.on('failedlogin', function (msg) {
+  console.log('failedlogin event!', msg)
+})
+
 connection.on('timeout', function () {
   console.log('socket timeout!')
   // connection.end()
+})
+
+connection.on('error', function () {
+  console.log('telnet error!');
+})
+
+connection.on('end', function () {
+  console.log('telnet host ending connection!');
 })
 
 connection.on('close', function () {
@@ -57,7 +72,7 @@ module.exports = function (core) {
       }),
       'connect': mkKRLaction([
         'params'
-      ], function (ctx, args) {
+      ], async function (ctx, args) {
         if (!_.has(args, 'params')) {
           throw new Error('telnet:connect requires a map of parameters')
         }
@@ -68,22 +83,27 @@ module.exports = function (core) {
         Object.keys(args.params).forEach(function(key) {
           parameters[key] = args.params[key]
         })
-        try {
-          connection.connect(parameters)
-          let res = connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
-          function (err, response) {
-            if (err) {
-              console.error(err)
-              return err
-            }
-            console.log('login cmd response', response)
-            return response
-          })
-          return res
-        } catch (err) {
-          console.error(err);
-          return err
+        let alive = await isValidHost();
+        console.log("alive", alive);
+        if (alive) {
+          try {
+            connection.connect(parameters)
+            let res = connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
+            function (err, response) {
+              if (err) {
+                console.error(err)
+                return err
+              }
+              console.log('login cmd response', response)
+              return response
+            })
+            return res
+          } catch (err) {
+            console.error(err);
+            return err
+          }
         }
+        return "Unable to connect to host " + parameters.host;
       }),
       'disconnect': mkKRLaction([
       ], function (ctx, args) {
