@@ -1,5 +1,5 @@
 import React from 'react'
-import { customEvent, customQuery } from '../../../../../utils/manifoldSDK';
+import { customEvent } from '../../../../../utils/manifoldSDK';
 
 export default class EditText extends React.Component {
   constructor (props) {
