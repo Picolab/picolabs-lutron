@@ -1,16 +1,13 @@
 import React from 'react';
-import { Media, Container, Row, Col } from 'reactstrap';
+import { Col, Row } from 'reactstrap';
 import EditableName from './EditableName';
 
 import '../LutronStyles.css';
-import openIcon from '../media/up-arrow-icon.png';
-import closeIcon from '../media/down-arrow-icon.png';
 import { customEvent, customQuery } from '../../../../../utils/manifoldSDK';
 
 import 'rc-slider/assets/index.css';
 import 'rc-tooltip/assets/bootstrap.css';
 import Slider from 'rc-slider';
-import Tooltip from 'rc-tooltip';
 
 class Shade extends React.Component {
   constructor(props) {
@@ -53,14 +50,14 @@ class Shade extends React.Component {
   }
 
   open = () => {
-    let promise = customEvent(this.props.eci, "lutron", "shades_open", { percentage: 100 }, "manifold_app");
+    customEvent(this.props.eci, "lutron", "shades_open", { percentage: 100 }, "manifold_app");
     if (this.mounted) {
       this.setState({ currentLevel: 100 });
     }
   }
 
   close = () => {
-    let promise = customEvent(this.props.eci, "lutron", "shades_close", null, "manifold_app");
+    customEvent(this.props.eci, "lutron", "shades_close", null, "manifold_app");
     if (this.mounted) {
       this.setState({ currentLevel: 0 });
     }
@@ -68,7 +65,7 @@ class Shade extends React.Component {
 
   setShadeLevel = (value) => {
     let type = (value > 0) ? "shades_open" : "shades_close";
-    let promise = customEvent(//eci, domain, type, attributes, eid
+    customEvent(//eci, domain, type, attributes, eid
       this.props.eci,
       "lutron",
       type,

@@ -1,8 +1,9 @@
 import React from 'react';
-import Light from '../components/Light.js';
-import Shade from '../components/Shade.js';
-import Group from '../components/Group.js';
-import { Container, Row, Col, Badge } from 'reactstrap';
+import Light from '../components/Light';
+import Shade from '../components/Shade';
+import Group from '../components/Group';
+import DeviceListModal from '../components/DeviceListModal';
+import { Container, Row, Col, UncontrolledTooltip } from 'reactstrap';
 import { customEvent, customQuery } from '../../../../../utils/manifoldSDK';
 
 class GroupPage extends React.Component {
@@ -15,6 +16,7 @@ class GroupPage extends React.Component {
       lights: {},
       shades: {},
       groups: {},
+      unsafeGroups: [],
       addDeviceModal: false,
       removeDeviceModal: false,
       loading: false
@@ -27,7 +29,7 @@ class GroupPage extends React.Component {
   }
 
   componentWillReceiveProps(props) {
-    const { group } = this.props;
+    const group = this.props.group;
     if (props.group.id !== group.id) {
       this.fetchGroupData(props.group.eci)
     }
@@ -43,9 +45,9 @@ class GroupPage extends React.Component {
     let promise = customQuery(eci, "Lutron_group", "devicesAndDetails");
 
     promise.then((resp) => {
-      let { lights, shades, groups } = resp.data;
+      let { lights, shades, groups, unsafeGroups } = resp.data;
       if (this.mounted) {
-        this.setState({ lights, shades, groups, loading: false });
+        this.setState({ lights, shades, groups, unsafeGroups, loading: false });
       }
     })
   }
@@ -56,12 +58,97 @@ class GroupPage extends React.Component {
     }
   }
 
-  toggleAddDeviceModal() {
+  toggleAddDeviceModal = () => {
     this.setState({ addDeviceModal: !this.state.addDeviceModal });
   }
 
-  toggleRemoveDeviceModal() {
+  getAvailableLightsList() {
+    var availableLights = {};
+    let allLights = this.props.lights;
+    let unavailableLightNames = Object.keys(this.state.lights);
+    let keys = Object.keys(allLights);
+    keys.map((key) => {
+      if (!unavailableLightNames.includes(allLights[key].name)) {
+        availableLights[key] = allLights[key]
+      }
+      return null;
+    })
+    return availableLights;
+  }
+
+  getAvailableShadesList() {
+    var availableShades = {};
+    let allShades = this.props.shades;
+    let unavailableShadeNames = Object.keys(this.state.shades);
+    let keys = Object.keys(allShades);
+    keys.map((key) => {
+      if (!unavailableShadeNames.includes(allShades[key].name)) {
+        availableShades[key] = allShades[key]
+      }
+      return null;
+    })
+    return availableShades;
+  }
+
+  getAvailableGroupsList() {
+    var availableGroups = {};
+    let allGroups = this.props.groups;
+    let unavailableGroupNames = Object.keys(this.state.groups);
+    unavailableGroupNames.push(this.props.group.name);
+    let keys = Object.keys(allGroups);
+    keys.map((key) => {
+      if (!unavailableGroupNames.includes(allGroups[key].name)
+        && !this.state.unsafeGroups.includes(allGroups[key].name)) {
+        availableGroups[key] = allGroups[key]
+      }
+      return null;
+    });
+    return availableGroups;
+  }
+
+  groupHasDevices() {
+    let { lights, shades, groups } = this.state;
+    return (Object.keys(lights).length > 0
+        || Object.keys(shades).length > 0
+        || Object.keys(groups).length > 0)
+  }
+
+  addDevices = (devices) => {
+    if (devices.length > 0) {
+      let promise = customEvent(
+        this.props.group.eci,
+        "lutron",
+        "add_devices",
+        { devices },
+        "manifold_app"
+      );
+
+      promise.then((resp) => {
+        this.props.sync();
+      })
+    }
+    this.toggleAddDeviceModal();
+  }
+
+  toggleRemoveDeviceModal = () => {
     this.setState({ removeDeviceModal: !this.state.removeDeviceModal });
+  }
+
+  removeDevices = (devices) => {
+    if (devices.length > 0) {
+      let promise = customEvent(
+        this.props.group.eci,
+        "lutron",
+        "remove_devices",
+        { devices },
+        "manifold_app"
+      );
+
+      promise.then((resp) => {
+        this.fetchGroupData();
+      })
+    }
+    this.toggleRemoveDeviceModal();
   }
 
   groupLightsOn = () => {
@@ -175,7 +262,9 @@ class GroupPage extends React.Component {
         <Col xs="auto" key={key}>
           <Group
             key={key}
+            id={group.id}
             name={group.name}
+            group={group}
             onClick={this.onItemSelect("group", group.id)}/>
         </Col>
       );
@@ -183,35 +272,75 @@ class GroupPage extends React.Component {
   }
 
   render() {
+    let { lights, shades, groups } = this.state;
     return (
       <Container>
         <Row>
-          <h4>{this.props.group.name} </h4>
+          <h3>{this.props.group.name} </h3>
           <Col xs="0" style={{ "marginLeft": "5px"}}>
-            <i className="fa fa-plus-circle clickable create no-border" onClick={this.toggleAddDeviceModal}/>
+            <i
+              id="add-device-button"
+              className="fa fa-plus-circle fa-1x clickable create no-border"
+              onClick={this.toggleAddDeviceModal}/>{'  '}
+            <UncontrolledTooltip placement="top" target="add-device-button">
+              Add Devices
+            </UncontrolledTooltip>
+            {this.groupHasDevices() &&
+              <i
+                id="remove-device-button"
+                className="fa fa-minus-circle fa-1x clickable delete no-border"
+                onClick={this.toggleRemoveDeviceModal}/>
+            }
+            {this.groupHasDevices() &&
+              <UncontrolledTooltip placement="top" target="remove-device-button">
+                Delete Devices
+              </UncontrolledTooltip>
+            }
           </Col>
-          <Col sm={{ size: "auto", offset: 1}}>
+        </Row>
+        <Row>
+          <Col xs="auto">
             <Row>
-            {(Object.keys(this.state.lights).length > 0 || Object.keys(this.state.groups).length > 0) &&
+            {(Object.keys(lights).length > 0 || Object.keys(groups).length > 0) &&
             <div className="row cell">
                 <Col xs="auto">
-                  <i className="fa fa-power-off fa-2x power-on-color clickable" onClick={this.groupLightsOn} />
-                  All Lights On
+                  <i
+                    id="lights-on-button"
+                    className="fa fa-power-off fa-3x power-on-color clickable"
+                    onClick={this.groupLightsOn} />
+                  <UncontrolledTooltip placement="top" target="lights-on-button">
+                    All Lights On
+                  </UncontrolledTooltip>
                 </Col>
                 <Col xs="auto">
-                  <i className="fa fa-power-off fa-2x clickable" onClick={this.groupLightsOff}/>
-                  All Lights Off
+                  <i
+                    id="lights-off-button"
+                    className="fa fa-power-off fa-3x clickable"
+                    onClick={this.groupLightsOff}/>
+                  <UncontrolledTooltip placement="top" target="lights-off-button">
+                    All Lights Off
+                  </UncontrolledTooltip>
                 </Col>
             </div>}
-            {(Object.keys(this.state.shades).length > 0 || Object.keys(this.state.groups).length > 0) &&
+            {(Object.keys(shades).length > 0 || Object.keys(groups).length > 0) &&
             <div className="row cell">
                 <Col xs="auto">
-                  <i className="fa fa-arrow-circle-o-up fa-2x manifold-blue clickable" onClick={this.groupShadesOpen}/>
-                  All Shades Open
+                  <i
+                    id="shades-up-button"
+                    className="fa fa-arrow-circle-o-up fa-3x manifold-blue clickable"
+                    onClick={this.groupShadesOpen}/>
+                  <UncontrolledTooltip placement="top" target="shades-up-button">
+                    All Shades Open
+                  </UncontrolledTooltip>
                 </Col>
                 <Col xs="auto">
-                  <i className="fa fa-arrow-circle-o-down fa-2x clickable" onClick={this.groupShadesClose}/>
-                  All Shades Close
+                  <i
+                    id="shades-down-button"
+                    className="fa fa-arrow-circle-o-down fa-3x clickable"
+                    onClick={this.groupShadesClose}/>
+                  <UncontrolledTooltip placement="top" target="shades-down-button">
+                    All Shades Close
+                  </UncontrolledTooltip>
                 </Col>
             </div>}
             </Row>
@@ -219,19 +348,37 @@ class GroupPage extends React.Component {
         </Row>
         <br/>
         <Row>
-          {Object.keys(this.state.groups).length > 0 &&
+          {Object.keys(groups).length > 0 &&
             <div><h5>Groups</h5><Row>{this.renderGroups()}</Row></div>}
         </Row>
         <br/>
         <Row>
-          {Object.keys(this.state.lights).length > 0 &&
+          {Object.keys(lights).length > 0 &&
             <div><h5>Lights</h5><Row>{this.renderLights()}</Row></div>}
         </Row>
         <br/>
         <Row>
-          {Object.keys(this.state.shades).length > 0 &&
+          {Object.keys(shades).length > 0 &&
             <div><h5>Shades</h5><Row>{this.renderShades()}</Row></div>}
         </Row>
+        <DeviceListModal
+          lights={this.getAvailableLightsList()}
+          shades={this.getAvailableShadesList()}
+          groups={this.getAvailableGroupsList()}
+          onSubmit={this.addDevices}
+          toggle={this.toggleAddDeviceModal}
+          isOpen={this.state.addDeviceModal}
+          headerText="Select Devices to Add"
+          primaryButtonText="Add Devices" />
+        <DeviceListModal
+          lights={lights}
+          shades={shades}
+          groups={groups}
+          onSubmit={this.removeDevices}
+          toggle={this.toggleRemoveDeviceModal}
+          isOpen={this.state.removeDeviceModal}
+          headerText="Select Devices to Remove"
+          primaryButtonText="Remove Devices" />
       </Container>
     );
   }

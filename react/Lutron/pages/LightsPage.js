@@ -1,14 +1,8 @@
 import React from 'react';
 import { Container, Row, Col } from 'reactstrap';
 import Light from '../components/Light';
-import { customEvent, customQuery } from '../../../../../utils/manifoldSDK';
-import spinner from '../media/circle-loading.gif';
 
 class LightsPage extends React.Component {
-  constructor(props) {
-    super(props);
-  }
-
   onItemSelect(type) {
     return (event) => {
       this.props.onItemSelect(type);
@@ -32,7 +26,7 @@ class LightsPage extends React.Component {
     return (
       <div>
         <Container>
-          <h4>Lights</h4>
+          <h3>Lights</h3>
             <Row>
               {this.renderLights()}
             </Row>

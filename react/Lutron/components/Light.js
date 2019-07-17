@@ -1,15 +1,13 @@
 import React from 'react';
-import { Media, Container, Row, Col } from 'reactstrap';
+import { Col } from 'reactstrap';
 import EditableName from './EditableName';
 
 import { customEvent, customQuery } from '../../../../../utils/manifoldSDK';
-import powerIcon from '../media/power-button-icon.png';
 import '../LutronStyles.css';
 
 import 'rc-slider/assets/index.css';
 import 'rc-tooltip/assets/bootstrap.css';
 import Slider from 'rc-slider';
-import Tooltip from 'rc-tooltip';
 
 class Light extends React.Component {
   constructor(props) {
@@ -56,7 +54,7 @@ class Light extends React.Component {
       let toggle = (this.state.currentBrightness > 0) ? "lights_off" : "lights_on";
       let newBrightness = (toggle === "lights_off") ? 0 : 100;
 
-      let promise = customEvent(this.props.eci, "lutron", toggle, null, "manifold_app");
+      customEvent(this.props.eci, "lutron", toggle, null, "manifold_app");
 
       if (this.mounted) {
         this.setState({ currentBrightness: newBrightness });
@@ -83,7 +81,7 @@ class Light extends React.Component {
   }
 
   setBrightness = (value) => {
-    let promise = customEvent(//eci, domain, type, attributes, eid
+    customEvent(//eci, domain, type, attributes, eid
       this.props.eci,
       "lutron",
       "set_brightness",

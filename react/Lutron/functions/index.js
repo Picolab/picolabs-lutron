@@ -1,3 +1,0 @@
-export colorFromBrightness(b) {
-  
-}

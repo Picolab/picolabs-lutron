@@ -32,7 +32,7 @@ class ShadesPage extends React.Component {
     return (
       <div>
         <Container>
-          <h4>Shades</h4>
+          <h3>Shades</h3>
           <Row>
             {this.renderShades()}
           </Row>
