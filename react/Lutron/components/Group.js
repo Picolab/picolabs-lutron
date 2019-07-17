@@ -1,32 +1,21 @@
 import React from 'react';
-import { Collapse, Col, Button } from 'reactstrap';
+import { Col, UncontrolledTooltip } from 'reactstrap';
 import '../LutronStyles.css';
-import groupIcon from '../media/group-icon.png';
 
 class Group extends React.Component {
-  constructor(props) {
-    super(props);
-    this.toggle = this.toggle.bind(this);
-    this.state = { collapse: false };
-  }
-
-  toggle() {
-    this.setState({ collapse: !this.state.collapse });
-  }
-
   renderDeleteButton() {
     return (
-      <div className="row cell" style={{ "margin": "0px" }} onMouseEnter={this.toggle} onMouseLeave={this.toggle}>
-        <div style={{ "backgroundColor": "red", "height": "inherit", "width": "5px" }} />
-        <Collapse isOpen={this.state.collapse}>
-          <Button
-            color="danger"
+      <div style={{ width: "12px" }}>
+        <div id={this.props.id}>
+          <i
+            className="fa fa-minus-circle delete clickable no-border show-me"
             onClick={this.props.delete}
-            id={this.props.name}
-            style={{ "lineHeight": "2.0" }}>
-            Delete
-          </Button>
-        </Collapse>
+            name={this.props.name}>
+          </i>
+        </div>
+        <UncontrolledTooltip placement="top" target={this.props.id}>
+          Delete {this.props.name}
+        </UncontrolledTooltip>
       </div>
     );
   }
@@ -34,8 +23,8 @@ class Group extends React.Component {
     var defaultIcon = "fa fa-object-group manifold-blue"
     var icon = (this.props.icon ? this.props.icon : defaultIcon);
     return (
-      <div className="row">
-        {icon === defaultIcon && this.renderDeleteButton()}
+      <div className="row show-him">
+        {this.props.withDeleteButton && this.renderDeleteButton()}
         <div className="clickable row cell" onClick={this.props.onClick}>
           <Col xs="auto">
             <i className={icon + " fa-3x"} />
