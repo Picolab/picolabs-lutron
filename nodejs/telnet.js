@@ -20,6 +20,18 @@ var parameters = {
   "timeout": 1800000 // 30 minutes
 }
 
+var raiseEvent;
+
+var timeoutEvent = {
+  eci: "",
+  eid: "telnet_socket_timeout",
+  domain: "telnet",
+  type: "socket_timeout",
+  attrs: {
+    "duration": parameters.timeout
+  }
+}
+
 var getHost = function() {
   return parameters.host
 }
@@ -48,6 +60,7 @@ connection.on('failedlogin', function (msg) {
 
 connection.on('timeout', function () {
   console.log('socket timeout!')
+  raiseEvent(timeoutEvent)
   // connection.end()
 })
 
@@ -66,6 +79,10 @@ connection.on('close', function () {
 module.exports = function (core) {
   return {
     def: {
+      'parameters': mkKRLfn([
+      ], function (ctx, args) {
+        return parameters;
+      }),
       'host': mkKRLfn([
       ], function (ctx, args) {
         return getHost()
@@ -73,19 +90,19 @@ module.exports = function (core) {
       'connect': mkKRLaction([
         'params'
       ], async function (ctx, args) {
-        if (!_.has(args, 'params')) {
-          throw new Error('telnet:connect requires a map of parameters')
+        if (_.has(args, 'params')) {
+          Object.keys(args.params).forEach(function(key) {
+            parameters[key] = args.params[key]
+          })
         }
-        if (!_.has(args.params, 'username')
-        || !_.has(args.params, 'password')) {
-          throw new Error('telnet:connect(params): params requires a username, and password')
-        }
-        Object.keys(args.params).forEach(function(key) {
-          parameters[key] = args.params[key]
-        })
+
         let alive = await isValidHost();
         console.log("alive", alive);
+
         if (alive) {
+          timeoutEvent.eci = _.get(ctx, ['event', 'eci'], _.get(ctx, ['query', 'eci']))
+          timeoutEvent.timeout = parameters.timeout;
+          raiseEvent = core.signalEvent;
           try {
             connection.connect(parameters)
             let res = connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
