@@ -15,57 +15,72 @@ var parameters = {
   "passwordPrompt": "password:",
   "username": 'root',
   "password": 'guest',
-  "failedLoginMatch": "bad login",
+  "failedLoginMatch": new RegExp('bad.*login.*'),
   "initialLFCR": true,
   "timeout": 1800000 // 30 minutes
 }
 
 var raiseEvent;
-
-var timeoutEvent = {
-  eci: "",
-  eid: "telnet_socket_timeout",
-  domain: "telnet",
-  type: "socket_timeout",
-  attrs: {
-    "duration": parameters.timeout
-  }
-}
-
-var getHost = function() {
-  return parameters.host
-}
+var meta_eci;
 
 var isValidHost = async function() {
   let response = await ping.promise.probe(parameters.host);
-  console.log("isValidHost", response);
   return response.alive;
 }
 
-connection.on('ready', function (prompt) {
-  console.log('ready!')
-})
-
-connection.on('writedone', function (prompt) {
-  console.log('writedone event!')
-})
-
-connection.on('connect', function (prompt) {
+connection.on('connect', function () {
   console.log('telnet connection established!')
 })
 
-connection.on('failedlogin', function (msg) {
-  console.log('failedlogin event!', msg)
+connection.on('ready', function (prompt) {
+  console.log('ready!')
+  raiseEvent({
+    eci: meta_eci,
+    eid: "telnet_ready",
+    domain: "telnet",
+    type: "ready"
+  })
+})
+
+connection.on('writedone', function () {
+  console.log('writedone event!');
+  raiseEvent({
+    eci: meta_eci,
+    eid: "telnet_writedone",
+    domain: "telnet",
+    type: "writedone"
+  })
+})
+
+connection.on('failedlogin', function () {
+  console.log('failedlogin event!')
+  raiseEvent({
+    eci: meta_eci,
+    eid: "telnet_failedlogin",
+    domain: "telnet",
+    type: "failedlogin",
+  })
 })
 
 connection.on('timeout', function () {
   console.log('socket timeout!')
-  raiseEvent(timeoutEvent)
-  // connection.end()
+  raiseEvent({
+    eci: meta_eci,
+    eid: "telnet_socket_timeout",
+    domain: "telnet",
+    type: "socket_timeout",
+    attrs: { "duration": parameters.timeout }
+  })
 })
 
 connection.on('error', function () {
   console.log('telnet error!');
+  raiseEvent({
+    eci: meta_eci,
+    eid: "telnet_error",
+    domain: "telnet",
+    type: "error"
+  })
 })
 
 connection.on('end', function () {
@@ -85,7 +100,7 @@ module.exports = function (core) {
       }),
       'host': mkKRLfn([
       ], function (ctx, args) {
-        return getHost()
+        return parameters.host;
       }),
       'connect': mkKRLaction([
         'params'
@@ -100,71 +115,40 @@ module.exports = function (core) {
         console.log("alive", alive);
 
         if (alive) {
-          timeoutEvent.eci = _.get(ctx, ['event', 'eci'], _.get(ctx, ['query', 'eci']))
-          timeoutEvent.timeout = parameters.timeout;
+          meta_eci = _.get(ctx, ['event', 'eci'], _.get(ctx, ['query', 'eci']))
           raiseEvent = core.signalEvent;
-          try {
-            connection.connect(parameters)
-            let res = connection.send(parameters.username + '\r\n' + parameters.password + '\r\n', null,
-            function (err, response) {
-              if (err) {
-                console.error(err)
-                return err
-              }
-              console.log('login cmd response', response)
-              return response
-            })
-            return res
-          } catch (err) {
-            console.error(err);
-            return err
-          }
+          connection.connect(parameters);
+          let res = await connection.send(
+            parameters.username + '\r\n' + parameters.password + '\r\n'
+          );
+          return res;
         }
         return "Unable to connect to host " + parameters.host;
       }),
       'disconnect': mkKRLaction([
-      ], function (ctx, args) {
-        try {
-          let res = connection.end()
-          return res
-        } catch (err) {
-          console.error(err)
-          return err
-        }
+      ], async function (ctx, args) {
+        let res = await connection.end();
+        return res;
       }),
       'sendCMD': mkKRLaction([
         'command'
-      ], function (ctx, args) {
+      ], async function (ctx, args) {
         if (!_.has(args, 'command')) {
           throw new Error('telnet:sendCMD needs a command string')
         }
         console.log('send cmd args', args)
-        let res = connection.send(args.command + '\r\n', null, function (err, response) {
-          if (err) {
-            console.error(err)
-            return err
-          }
-          console.log('send cmd results', response)
-          return response
-        })
-        return res
+        let res = await connection.send(args.command + '\r\n');
+        return res;
       }),
       'query': mkKRLfn([
         'command'
-      ], function (ctx, args) {
+      ], async function (ctx, args) {
         if (args.command.substring(0,1) !== "?") {
           throw new Error('telnet:query(q): q must begin with a ?')
         }
         console.log('send query args', args)
-        let res = connection.send(args.command + '\r\n', null, function(err, response) {
-          if (err) {
-            console.error(err)
-            return err
-          }
-          console.log('send query results', response)
-          return response
-        })
-        return res
+        let res = await connection.send(args.command + '\r\n');
+        return res;
       }),
       'extractDataFromXML': mkKRLfn([
         'xml'
