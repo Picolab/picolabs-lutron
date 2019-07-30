@@ -89,6 +89,12 @@ connection.on('end', function () {
 
 connection.on('close', function () {
   console.log('connection closed')
+  raiseEvent({
+    eci: meta_eci,
+    eid: "telnet_closed",
+    domain: "telnet",
+    type: "connection_closed"
+  })
 })
 
 module.exports = function (core) {
