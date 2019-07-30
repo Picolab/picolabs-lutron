@@ -40,8 +40,8 @@ ruleset Lutron_light {
   rule initialize {
     select when wrangler ruleset_added where event:attr("rids") >< meta:rid
     pre {
-      attrs = event:attr("rs_attrs")
-      IntegrationID = attrs{"IntegrationID"}
+      attrs = event:attrs.klog("attrs")
+      IntegrationID = event:attr("IntegrationID")
     }
     always {
       ent:IntegrationID := IntegrationID
@@ -53,9 +53,8 @@ ruleset Lutron_light {
     pre {
       attrs = event:attrs.klog("subscription: ");
     }
-
-    if (attrs{"Rx_role"}.lc() == "light") then noop()
-
+    //if (attrs{"Rx_role"}.lc() == "light") then
+    noop()
     fired {
       raise wrangler event "pending_subscription_approval"
         attributes attrs;
@@ -63,13 +62,14 @@ ruleset Lutron_light {
     }
   }
 
-  rule on_visual_update {
-    select when visual update
+  rule visual_updated {
+    select when visual updated
     pre {
       dname = event:attr("dname")
       id = wrangler:myself(){"id"}
+      name_changed = event:attr("was_dname") != dname
     }
-    if dname then
+    if name_changed then
     event:send(
       {
         "eci": wrangler:parent_eci(), "eid": "child_name_changed",

@@ -128,9 +128,18 @@ ruleset Lutron_manager {
   }
 
   rule initialized {
-    select when wrangler ruleset_installed
+    select when wrangler ruleset_added
     fired {
-
+      ent:isConnected := false;
+      ent:devices := {
+        "areas": ent:device{"areas"}.defaultsTo({}),
+        "groups": ent:devices{"groups"}.defaultsTo({}),
+        "lights": ent:devices{"lights"}.defaultsTo({}),
+        "shades": ent:devices{"shades"}.defaultsTo({})
+      };
+      ent:lightIDs := ent:lightIDs.defaultsTo([]);
+      ent:shadeIDs := ent:shadeIDs.defaultsTo([]);
+      ent:areas := ent:areas.defaultsTo([]);
     }
   }
 
@@ -138,13 +147,37 @@ ruleset Lutron_manager {
     select when system online
     fired {
       ent:isConnected := false;
-      ent:devices{"areas"} := ent:devices{"areas"}.defaultsTo({}); // move these to ruleset_installed when in production
-      ent:devices{"groups"} := ent:devices{"groups"}.defaultsTo({});
-      ent:devices{"lights"} := ent:devices{"lights"}.defaultsTo({});
-      ent:devices{"shades"} := ent:devices{"shades"}.defaultsTo({});
+      ent:devices := {
+        "areas": ent:device{"areas"}.defaultsTo({}),
+        "groups": ent:devices{"groups"}.defaultsTo({}),
+        "lights": ent:devices{"lights"}.defaultsTo({}),
+        "shades": ent:devices{"shades"}.defaultsTo({})
+      };
       ent:lightIDs := ent:lightIDs.defaultsTo([]);
       ent:shadeIDs := ent:shadeIDs.defaultsTo([]);
       ent:areas := ent:areas.defaultsTo([]);
+    }
+  }
+
+  rule telnet_timout {
+    select when telnet socket_timeout
+    pre {
+      duration = telnet:parameters(){"timeout"}
+      minutes = math:floor(duration / 60000)
+      seconds = math:floor((duration - (minutes * 60000)) / 1000)
+      message = "you have been inactive for " + minutes + " minutes and " + seconds + " seconds"
+    }
+    send_directive("telnet_timeout", {"message": message})
+    fired {
+      ent:isConnected := false
+    }
+  }
+
+  rule telnet_connection_closed {
+    select when telnet connection_closed
+    send_directive("telnet_connection_closed", {"message": "telnet connection closed"})
+    fired {
+      ent:isConnected := false
     }
   }
 
@@ -152,16 +185,17 @@ ruleset Lutron_manager {
     select when lutron login
     pre {
       shellPrompt = "QNET>"
-      params = {"host": event:attr("host"),
+      params = {"host": event:attr("host") || telnet:parameters(){"host"},
                 "port": 23,
                 "shellPrompt": shellPrompt,
                 "loginPrompt": "login:",
                 "passwordPrompt": "password:",
-                "username": event:attr("username"),
-                "password": event:attr("password"),
+                "username": event:attr("username") || telnet:parameters(){"username"},
+                "password": event:attr("password") || telnet:parameters(){"password"},
                 "failedLoginMatch": "bad login",
                 "initialLFCR": true,
-                "timeout": 1800000 } // 30 minutes
+                "timeout": 1800000 // 30 minutes
+                }
     }
     every {
       telnet:connect(params) setting(response)
@@ -200,12 +234,20 @@ ruleset Lutron_manager {
     select when lutron sync_data
     pre {
       data = extractData()
+    }
+    always {
+      ent:data := data;
+    }
+  }
+
+  rule update_devices {
+    select when lutron sync_data
+    pre {
       update_lights = (not arraysAreEqual(ent:lightIDs, fetchLightIDs())).klog("update_lights:")
       update_shades = (not arraysAreEqual(ent:shadeIDs, fetchShadeIDs())).klog("update_shades:")
       update_areas =  (not arraysAreEqual(ent:areas, fetchAreas())).klog("update_areas")
     }
-    always {
-      ent:data := data;
+    fired {
       raise lutron event "create_lights" if update_lights;
       raise lutron event "create_shades" if update_shades;
       raise lutron event "create_default_areas" if update_areas;
@@ -236,6 +278,7 @@ ruleset Lutron_manager {
         attributes {
           "name": name,
           "type": "light",
+          "rid": meta:rid,
           "color": "#eeee00",
           "IntegrationID": light,
           "rids": [
@@ -259,6 +302,7 @@ ruleset Lutron_manager {
         attributes {
           "name": name,
           "type": "shade",
+          "rid": meta:rid,
           "color": "#8e8e8e",
           "IntegrationID": shade,
           "rids": [
@@ -284,6 +328,7 @@ ruleset Lutron_manager {
         attributes {
           "name": name,
           "type": "area",
+          "rid": meta:rid,
           "IntegrationID": id,
           "light_ids": lights,
           "color": "#EB4839",
@@ -306,6 +351,7 @@ ruleset Lutron_manager {
         attributes {
           "name": name,
           "type": "group",
+          "rid": meta:rid,
           "color": "#3CAD5E",
           "rids": [
             "Lutron_group"
@@ -320,14 +366,16 @@ ruleset Lutron_manager {
 
   rule on_child_initialized {
     select when wrangler child_initialized
+      where rid == meta:rid
     pre {
       attrs = event:attrs.klog("attrs")
       picoID = event:attr("id")
       name = event:attr("name")
-      type = event:attr("rs_attrs"){"type"}
+      type = event:attr("type")
       eci = event:attr("eci")
       grouping = type + "s"
     }
+    if type then noop()
     fired {
       ent:devices{[grouping, picoID]} := {"id": picoID, "name": name, "type": type, "eci": eci}
     }

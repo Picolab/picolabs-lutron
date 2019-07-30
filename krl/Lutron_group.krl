@@ -127,13 +127,14 @@ ruleset Lutron_group {
     }
   }
 
-  rule on_visual_update {
-    select when visual update
+  rule visual_updated {
+    select when visual updated
     pre {
       dname = event:attr("dname")
       id = wrangler:myself(){"id"}
+      name_changed = event:attr("was_dname") != dname
     }
-    if dname then
+    if name_changed then
     event:send(
       {
         "eci": wrangler:parent_eci(), "eid": "child_name_changed",

@@ -31,9 +31,8 @@ ruleset Lutron_area {
   rule initialize {
     select when wrangler ruleset_added where event:attr("rids") >< meta:rid
     pre {
-      attrs = event:attr("rs_attrs")
-      IntegrationID = attrs{"IntegrationID"}
-      lightIDs = attrs{"light_ids"}
+      IntegrationID = event:attr("IntegrationID")
+      lightIDs = event:attr("light_ids")
     }
     always {
       ent:IntegrationID := IntegrationID;
