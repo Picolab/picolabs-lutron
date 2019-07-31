@@ -173,14 +173,6 @@ ruleset Lutron_manager {
     }
   }
 
-  rule telnet_connection_closed {
-    select when telnet connection_closed
-    send_directive("telnet_connection_closed", {"message": "telnet connection closed"})
-    fired {
-      ent:isConnected := false
-    }
-  }
-
   rule login {
     select when lutron login
     pre {
@@ -395,7 +387,7 @@ ruleset Lutron_manager {
   }
 
   rule on_child_deletion {
-    select when wrangler delete_child
+    select when wrangler child_deleted
     pre {
       picoID = event:attr("id")
       updated_devices = removeDevice(picoID)
